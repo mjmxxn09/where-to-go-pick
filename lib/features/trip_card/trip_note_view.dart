@@ -274,24 +274,24 @@ class _TripNotePainter extends CustomPainter {
     _text(canvas, text, Offset(16, y + 10), 20, AppColors.mapLabel, font: AppFonts.handwriting);
   }
 
-  /// 장소 이름: 칸 폭 안에서 최대 2줄로 줄바꿈하고, 그래도 넘치면 17px → 13px까지 줄인다.
-  /// 그래도 안 되면 말줄임(…).
+  /// 장소 이름: 띄어쓰기 단위로 최대 2줄([wrapByWords]). 안 들어가면 15px → 12px까지 줄이고,
+  /// 그래도 안 되면(띄어쓰기 없는 아주 긴 이름) 2줄 말줄임(…).
   TextPainter _layoutPlaceName(String text, double maxWidth) {
-    late TextPainter tp;
-    for (var size = 17.0; size >= 13; size -= 1) {
-      tp = TextPainter(
-        text: TextSpan(
-          text: text,
-          style: TextStyle(fontFamily: AppFonts.handwriting, fontSize: size, height: 1.05, color: AppColors.mapLabel),
-        ),
-        textAlign: TextAlign.center,
-        textDirection: TextDirection.ltr,
-        maxLines: 2,
-        ellipsis: '…',
-      )..layout(maxWidth: maxWidth);
-      if (!tp.didExceedMaxLines) break;
+    TextPainter make(String t, double size, {TextAlign align = TextAlign.center, bool clip = false}) => TextPainter(
+          text: TextSpan(
+            text: t,
+            style: TextStyle(fontFamily: AppFonts.handwriting, fontSize: size, height: 1.05, color: AppColors.mapLabel),
+          ),
+          textAlign: align,
+          textDirection: TextDirection.ltr,
+          maxLines: clip ? 2 : null,
+          ellipsis: clip ? '…' : null,
+        );
+    for (var size = 15.0; size >= 12; size -= 1) {
+      final lines = wrapByWords(text, maxWidth, (line) => (make(line, size, align: TextAlign.left)..layout()).width);
+      if (lines != null) return make(lines.join('\n'), size)..layout(maxWidth: maxWidth + 1);
     }
-    return tp;
+    return make(text, 12, clip: true)..layout(maxWidth: maxWidth);
   }
 
   TextPainter _layoutText(String text, double size, Color color, {FontWeight weight = FontWeight.w400}) =>

@@ -19,8 +19,8 @@ class TripCardLayoutConfig {
     this.turnInset = 80,
     this.endInset = 36,
     this.stopsPerRow = 3,
-    this.stopsLeft = 100,
-    this.stopsRight = 254,
+    this.stopsLeft = 94,
+    this.stopsRight = 264,
     this.footerHeight = 150,
   });
 
@@ -49,7 +49,7 @@ class TripCardLayoutConfig {
   double get slotWidth => (stopsRight - stopsLeft) / stopsPerRow;
 
   /// 장소 이름이 쓸 수 있는 최대 폭. 같은 쪽(위 또는 아래) 이웃은 두 칸 떨어져 있으므로 2칸 − 8px.
-  double get labelMaxWidth => slotWidth * 2 - 8;
+  double get labelMaxWidth => slotWidth * 2 - 18;
 }
 
 /// 길 그리기 명령. 화면에서는 Flutter Path로 바꾼다.
@@ -176,7 +176,10 @@ TripCardLayout layoutTripCard(int stopCount, {TripCardLayoutConfig config = cons
     final lastInRow = ((i + 1) * c.stopsPerRow - 1).clamp(0, stopCount - 1);
     final rightSide = i.isEven;
     final innerEdge = rightSide ? c.rightTurnX + c.radius - 10 : c.leftTurnX - c.radius + 10;
-    final labelEdge = rightSide ? c.stopsRight + c.slotWidth / 2 + 4 : c.stopsLeft - c.slotWidth / 2 - 4;
+    // 줄 끝 장소(가장 바깥 칸)의 이름 끝 + 4px
+    final labelEdge = rightSide
+        ? c.stopsRight - c.slotWidth / 2 + c.labelMaxWidth / 2 + 4
+        : c.stopsLeft + c.slotWidth / 2 - c.labelMaxWidth / 2 - 4;
     final width = (innerEdge - labelEdge).abs() - 6;
     stickers.add(StickerSlot(
       afterRow: i,
@@ -227,4 +230,26 @@ List<TripCardPage> paginateTrip(Trip trip, TripCardMode mode) {
   if (days.isEmpty) return const [TripCardPage(days: [])];
   if (mode == TripCardMode.onePage || days.length == 1) return [TripCardPage(days: days)];
   return [for (final d in days) TripCardPage(days: [d])];
+}
+
+/// 장소 이름을 **띄어쓰기 단위로만** 줄바꿈한다("안목 커피거 / 리"가 아니라 "안목 / 커피거리").
+/// 한 줄에 다 들어가면 한 줄. [measure]는 한 줄 폭을 잰다.
+/// [maxLines] 안에 못 넣거나 한 단어가 [maxWidth]보다 넓으면 null(글자를 줄이거나 말줄임으로 처리).
+List<String>? wrapByWords(String text, double maxWidth, double Function(String line) measure, {int maxLines = 2}) {
+  final words = text.trim().split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
+  if (words.isEmpty) return const [''];
+  final lines = <String>[];
+  var current = '';
+  for (final word in words) {
+    final candidate = current.isEmpty ? word : '$current $word';
+    if (measure(candidate) <= maxWidth) {
+      current = candidate;
+      continue;
+    }
+    if (current.isEmpty || measure(word) > maxWidth) return null;
+    lines.add(current);
+    current = word;
+  }
+  lines.add(current);
+  return lines.length <= maxLines ? lines : null;
 }

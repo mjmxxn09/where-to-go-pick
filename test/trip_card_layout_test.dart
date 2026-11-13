@@ -35,7 +35,7 @@ void main() {
       final layout = layoutTripCard(3);
       final sameSideGap = (layout.stops[2].x - layout.stops[0].x).abs();
       expect(layout.labelMaxWidth, greaterThan(80));
-      expect(sameSideGap - layout.labelMaxWidth, greaterThanOrEqualTo(7.99));
+      expect(sameSideGap - layout.labelMaxWidth, greaterThanOrEqualTo(17.99)); // 이름 사이 18px 이상
     });
 
     test('반원마다 그림 자리가 하나씩 있고, 줄 끝 이름과 겹치지 않는다', () {
@@ -88,6 +88,24 @@ void main() {
       final pages = paginateTrip(trip, TripCardMode.perDay);
       expect(pages, hasLength(3));
       expect(pages.map((p) => p.checkIns.length), [4, 3, 2]);
+    });
+  });
+
+  group('wrapByWords', () {
+    double measure(String s) => s.length * 10.0; // 글자당 10px
+
+    test('한 줄에 들어가면 그대로', () {
+      expect(wrapByWords('오죽헌', 95, measure), ['오죽헌']);
+    });
+
+    test('넘치면 띄어쓰기에서만 나눈다', () {
+      expect(wrapByWords('안목 커피거리', 60, measure), ['안목', '커피거리']);
+      expect(wrapByWords('강릉 중앙 시장', 50, measure), ['강릉 중앙', '시장']);
+    });
+
+    test('한 단어가 너무 길거나 3줄이 넘으면 null', () {
+      expect(wrapByWords('초당순두부마을', 60, measure), isNull);
+      expect(wrapByWords('가 나 다 라 마', 20, measure), isNull);
     });
   });
 }

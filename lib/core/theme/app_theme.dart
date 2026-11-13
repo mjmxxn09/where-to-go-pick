@@ -30,7 +30,8 @@ abstract final class AppColors {
 /// 둥근 제목체·손글씨체. 글꼴 파일이 없으면 Flutter가 시스템 글꼴로 대체한다(pubspec 주석 참고).
 abstract final class AppFonts {
   static const title = 'Jua';
-  static const handwriting = 'NanumPenScript';
+  /// 여행 노트 손글씨: 감자꽃(Gamja Flower).
+  static const handwriting = 'GamjaFlower';
 }
 
 /// 레이아웃은 8dp 계열을 쓴다(픽클 디자인 규칙).

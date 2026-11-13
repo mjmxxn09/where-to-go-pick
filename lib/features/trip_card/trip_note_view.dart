@@ -100,8 +100,8 @@ class _TripNotePainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     _paper(canvas, size);
     _tape(canvas, size);
-    _text(canvas, title, const Offset(52, 26), 34, AppColors.mapLabel, font: AppFonts.handwriting);
-    _text(canvas, subtitle, const Offset(54, 72), 17, AppColors.textSecondary, font: AppFonts.handwriting);
+    _text(canvas, title, const Offset(52, 26), 29, AppColors.mapLabel, font: AppFonts.handwriting);
+    _text(canvas, subtitle, const Offset(54, 67), 15, AppColors.textSecondary, font: AppFonts.handwriting);
     drawDoodle(canvas, PlaceType.nature, const Offset(-2, 20));
 
     _road(canvas);
@@ -266,7 +266,7 @@ class _TripNotePainter extends CustomPainter {
       );
   }
 
-  /// 장소 이름: 띄어쓰기 단위로 최대 2줄([wrapByWords]). 안 들어가면 15px → 12px까지 줄이고,
+  /// 장소 이름: 띄어쓰기 단위로 최대 2줄([wrapByWords]). 안 들어가면 13px → 11px까지 줄이고,
   /// 그래도 안 되면(띄어쓰기 없는 아주 긴 이름) 2줄 말줄임(…).
   TextPainter _layoutPlaceName(String text, double maxWidth) {
     TextPainter make(String t, double size, {TextAlign align = TextAlign.center, bool clip = false}) => TextPainter(
@@ -279,11 +279,11 @@ class _TripNotePainter extends CustomPainter {
           maxLines: clip ? 2 : null,
           ellipsis: clip ? '…' : null,
         );
-    for (var size = 15.0; size >= 12; size -= 1) {
+    for (var size = 13.0; size >= 11; size -= 1) {
       final lines = wrapByWords(text, maxWidth, (line) => (make(line, size, align: TextAlign.left)..layout()).width);
       if (lines != null) return make(lines.join('\n'), size)..layout(maxWidth: maxWidth + 1);
     }
-    return make(text, 12, clip: true)..layout(maxWidth: maxWidth);
+    return make(text, 11, clip: true)..layout(maxWidth: maxWidth);
   }
 
   TextPainter _layoutText(String text, double size, Color color, {FontWeight weight = FontWeight.w400}) =>

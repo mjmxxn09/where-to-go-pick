@@ -77,6 +77,7 @@ docs/               제품·아키텍처·출시 체크리스트
 - [아키텍처와 픽클 API 연동](docs/architecture.md)
 - [여행 노트 배치 규칙](docs/trip-card.md)
 - [출시 전 체크리스트](docs/launch-checklist.md)
+- [스티커 만들기(AI 시안 프롬프트)](docs/stickers.md)
 
 ## 데이터 출처
 

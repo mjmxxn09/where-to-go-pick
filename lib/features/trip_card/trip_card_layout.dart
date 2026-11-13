@@ -12,9 +12,9 @@ class TripCardLayoutConfig {
   const TripCardLayoutConfig({
     this.pageWidth = 358,
     this.firstRowY = 150,
-    this.rowGap = 120,
+    this.rowGap = 140,
     this.startX = 24,
-    this.turnInset = 66,
+    this.turnInset = 80,
     this.endInset = 36,
     this.stopsPerRow = 2,
     this.footerHeight = 160,
@@ -23,7 +23,7 @@ class TripCardLayoutConfig {
   final double pageWidth;
   final double firstRowY;
 
-  /// 줄 간격 = 반원 지름. 위 줄 이름·아이콘과 아래 줄 시간 라벨이 겹치지 않는 최소값.
+  /// 줄 간격 = 반원 지름. 위 줄 이름(최대 2줄)·아이콘과 아래 줄 시간 라벨이 겹치지 않는 최소값.
   final double rowGap;
   final double startX;
 
@@ -34,6 +34,12 @@ class TripCardLayoutConfig {
   final double footerHeight;
 
   double get radius => rowGap / 2;
+
+  /// 한 줄 안에서 장소 하나가 쓸 수 있는 가로 폭(점 사이 간격).
+  double get slotWidth => (rightTurnX - leftTurnX - 20) / stopsPerRow;
+
+  /// 장소 이름이 쓸 수 있는 최대 폭. 옆 장소 이름과 8px 이상 떨어진다.
+  double get labelMaxWidth => slotWidth - 8;
   double get leftTurnX => turnInset;
   double get rightTurnX => pageWidth - turnInset;
 }
@@ -83,6 +89,7 @@ class TripCardLayout {
     required this.endY,
     required this.rows,
     required this.pageHeight,
+    required this.labelMaxWidth,
   });
 
   final List<RoadStep> road;
@@ -93,6 +100,7 @@ class TripCardLayout {
   final double endY;
   final int rows;
   final double pageHeight;
+  final double labelMaxWidth;
 
   bool get endsOnRight => (rows - 1).isEven;
 }
@@ -118,7 +126,7 @@ TripCardLayout layoutTripCard(int stopCount, {TripCardLayoutConfig config = cons
   // 한 줄 안 칸 위치: 줄 폭을 (칸 수 + 1)로 나눈 자리. 진행 방향을 따라 순서를 매긴다.
   final usableLeft = c.leftTurnX + 10;
   final usableRight = c.rightTurnX - 10;
-  final step = (usableRight - usableLeft) / c.stopsPerRow;
+  final step = c.slotWidth;
   final stops = <StopSlot>[];
   for (var k = 0; k < stopCount; k++) {
     final row = k ~/ c.stopsPerRow;
@@ -139,6 +147,7 @@ TripCardLayout layoutTripCard(int stopCount, {TripCardLayoutConfig config = cons
     endY: lastY,
     rows: rows,
     pageHeight: lastY + c.footerHeight,
+    labelMaxWidth: c.labelMaxWidth,
   );
 }
 

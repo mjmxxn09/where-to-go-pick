@@ -123,8 +123,14 @@ class _TripNotePainter extends CustomPainter {
         );
       final time = multiDay && firstOfDay.contains(c.id) ? '${(dayOf[c.id] ?? 0) + 1}일차 · ${_hm(c.at)}' : _hm(c.at);
       _text(canvas, time, Offset(slot.x, slot.y - 30), 11, color, center: true, weight: FontWeight.w700);
-      _text(canvas, c.placeName, Offset(slot.x, slot.y + 12), 21, AppColors.mapLabel, center: true, font: AppFonts.handwriting);
-      drawDoodle(canvas, c.type, Offset(slot.x - 28, slot.y + 40));
+      final nameBottom = _placeName(canvas, c.placeName, Offset(slot.x, slot.y + 12), layout.labelMaxWidth);
+      const iconScale = 0.8;
+      drawDoodle(
+        canvas,
+        c.type,
+        Offset(slot.x - doodleSize.width * iconScale / 2, nameBottom + 4),
+        scale: iconScale,
+      );
     }
 
     _startPin(canvas);
@@ -270,6 +276,27 @@ class _TripNotePainter extends CustomPainter {
     final text = days > 1 ? '다녀온 곳 $count곳 · $days일 동안' : '다녀온 곳 $count곳';
     _text(canvas, text, Offset(16, y + 10), 20, AppColors.mapLabel, font: AppFonts.handwriting);
     _text(canvas, '#어디갈지Pick', Offset(size.width - 120, y + 10), 20, AppColors.primaryDeep, font: AppFonts.handwriting);
+  }
+
+  /// 장소 이름: 칸 폭 안에서 최대 2줄로 줄바꿈하고, 그래도 넘치면 21px → 14px까지 줄인다.
+  /// 그래도 안 되면 말줄임(…). 이름 아래쪽 y를 돌려준다(아이콘 위치 계산용).
+  double _placeName(Canvas canvas, String text, Offset topCenter, double maxWidth) {
+    late TextPainter tp;
+    for (var size = 21.0; size >= 14; size -= 1) {
+      tp = TextPainter(
+        text: TextSpan(
+          text: text,
+          style: TextStyle(fontFamily: AppFonts.handwriting, fontSize: size, height: 1.05, color: AppColors.mapLabel),
+        ),
+        textAlign: TextAlign.center,
+        textDirection: TextDirection.ltr,
+        maxLines: 2,
+        ellipsis: '…',
+      )..layout(maxWidth: maxWidth);
+      if (!tp.didExceedMaxLines) break;
+    }
+    tp.paint(canvas, Offset(topCenter.dx - tp.width / 2, topCenter.dy));
+    return topCenter.dy + tp.height;
   }
 
   void _text(

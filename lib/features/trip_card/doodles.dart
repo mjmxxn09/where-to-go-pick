@@ -3,10 +3,13 @@ import 'package:flutter/painting.dart';
 import '../../core/theme/app_theme.dart';
 import '../trip/trip_models.dart';
 
-/// 장소 종류별 손그림 아이콘(56×42 상자 안에 그린다). 선은 잉크색, 면은 파스텔.
-void drawDoodle(Canvas canvas, PlaceType type, Offset topLeft) {
+/// 장소 종류별 손그림 아이콘(기본 56×42 상자, [scale]로 줄인다). 선은 잉크색, 면은 파스텔.
+const doodleSize = Size(56, 42);
+
+void drawDoodle(Canvas canvas, PlaceType type, Offset topLeft, {double scale = 1}) {
   canvas.save();
   canvas.translate(topLeft.dx, topLeft.dy);
+  if (scale != 1) canvas.scale(scale);
   switch (type) {
     case PlaceType.beach:
       _beach(canvas);

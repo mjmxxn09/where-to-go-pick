@@ -38,6 +38,13 @@ void main() {
       }
     });
 
+    test('긴 장소 이름도 옆 장소와 겹치지 않는 폭 안에 들어간다', () {
+      final layout = layoutTripCard(4);
+      final gap = (layout.stops[1].x - layout.stops[0].x).abs();
+      expect(layout.labelMaxWidth, greaterThan(70));
+      expect(gap - layout.labelMaxWidth, greaterThanOrEqualTo(8));
+    });
+
     test('체크인이 없어도 길 한 줄은 그린다', () {
       final layout = layoutTripCard(0);
       expect(layout.rows, 1);

@@ -25,6 +25,8 @@ void drawDoodle(Canvas canvas, PlaceType type, Offset topLeft, {double scale = 1
       _seafood(canvas);
     case PlaceType.nature:
       _nature(canvas);
+    case PlaceType.lodging:
+      _heritage(canvas);
     case PlaceType.other:
       _star(canvas);
   }

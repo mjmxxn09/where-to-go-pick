@@ -10,6 +10,7 @@ enum PlaceType {
   food('맛집'),
   seafood('수산시장'),
   nature('자연'),
+  lodging('숙소'),
   other('기타');
 
   const PlaceType(this.label);

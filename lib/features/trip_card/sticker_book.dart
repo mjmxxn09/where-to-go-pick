@@ -32,6 +32,9 @@ class StickerBook {
       'place_nature_forest', 'place_nature_waterfall', 'place_nature_meadow',
       'place_nature_bamboo',
     ],
+    PlaceType.lodging: [
+      'place_lodging_hanok', 'place_lodging_hotel', 'place_lodging_resort', 'place_lodging_camping',
+    ],
     PlaceType.other: [],
   };
 

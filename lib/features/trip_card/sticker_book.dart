@@ -6,13 +6,14 @@ import '../trip/trip_models.dart';
 
 /// 여행 노트에 붙이는 스티커 그림(assets/stickers/*.png).
 ///
+/// - 유저가 스티커 서랍에서 골라 카드에 붙인다([catalog]). "자동으로 꾸미기"는 장소 종류로 골라 붙인다.
 /// - 장소 종류마다 그림이 여러 장이면, 장소 이름으로 하나를 골라 같은 장소는 늘 같은 그림이 나온다.
-/// - 파일이 없거나 읽지 못하면 null을 돌려주고, 화면은 코드로 그린 선 그림(doodles.dart)으로 대신한다.
+/// - 파일이 없거나 읽지 못한 그림은 서랍에 나오지 않는다.
 /// - 그림 출처: Gemini로 만든 시안(2026-11-13). 정식 출시 전 이용 약관·저작권 확인 필요(docs/stickers.md).
 class StickerBook {
   StickerBook(this._images);
 
-  /// 빈 책 — 모든 자리가 선 그림으로 대체된다.
+  /// 빈 책 — 서랍에 아무 스티커도 나오지 않는다.
   StickerBook.empty() : _images = const {};
 
   static const folder = 'assets/stickers';
@@ -36,7 +37,18 @@ class StickerBook {
 
   static const moveStickers = ['move_bus', 'move_car', 'move_bike', 'move_plane', 'move_ship', 'move_walk'];
 
+  /// 스티커 서랍 분류(장소 종류 + 이동). 그림이 없는 분류도 포함하므로 화면에서 [has]로 거른다.
+  static List<({String label, List<String> names})> get catalog => [
+        for (final e in placeStickers.entries)
+          if (e.value.isNotEmpty) (label: e.key.label, names: e.value),
+        (label: '이동', names: moveStickers),
+      ];
+
   final Map<String, ui.Image> _images;
+
+  bool has(String name) => _images.containsKey(name);
+
+  ui.Image? image(String name) => _images[name];
 
   bool get isEmpty => _images.isEmpty;
 

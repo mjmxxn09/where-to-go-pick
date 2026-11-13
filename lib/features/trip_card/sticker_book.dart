@@ -22,9 +22,15 @@ class StickerBook {
     PlaceType.cafe: ['place_cafe_coffee', 'place_cafe_terrace', 'place_cafe_store'],
     PlaceType.heritage: ['place_heritage_hanok', 'place_heritage_pagoda', 'place_heritage_fortress'],
     PlaceType.market: ['place_market_gate', 'place_market_produce', 'place_market_foodcart'],
-    PlaceType.food: ['place_food_stew', 'place_food_noodle', 'place_food_bbq'],
+    PlaceType.food: [
+      'place_food_stew', 'place_food_noodle', 'place_food_bbq',
+      'place_food_chicken', 'place_food_beer', 'place_food_jajangmyeon',
+    ],
     PlaceType.seafood: ['place_seafood_sashimi', 'place_seafood_grilled'],
-    PlaceType.nature: ['place_nature_forest', 'place_nature_waterfall', 'place_nature_meadow'],
+    PlaceType.nature: [
+      'place_nature_forest', 'place_nature_waterfall', 'place_nature_meadow',
+      'place_nature_bamboo',
+    ],
     PlaceType.other: [],
   };
 

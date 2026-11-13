@@ -6,7 +6,10 @@
 /// - 이름은 길 아래·위를 번갈아 쓴다(첫 장소는 아래). 같은 쪽 이웃과는 두 칸 떨어져 있어 넓게 쓸 수 있다.
 /// - 스티커는 유저가 직접 붙인다. 길이 꺾이는 반원 안쪽 여백([StickerSlot])은 "자동으로 꾸미기"가 쓰는 추천 자리다.
 /// - 체크인이 늘면 줄이 늘고 페이지 높이도 늘어난다.
+/// - 유저는 장소 막대를 같은 줄 길 위에서 좌우로 옮기고, 이름을 길 위·아래로 뒤집을 수 있다([StopEdit]).
 library;
+
+import 'dart:math' as math;
 
 import '../trip/trip_models.dart';
 
@@ -252,4 +255,66 @@ List<String>? wrapByWords(String text, double maxWidth, double Function(String l
   }
   lines.add(current);
   return lines.length <= maxLines ? lines : null;
+}
+
+/// 유저가 바꾼 장소 막대 위치. 비어 있는 값은 기본 배치를 따른다.
+class StopEdit {
+  const StopEdit({this.x, this.labelAbove});
+
+  /// 막대의 x(카드 좌표). 같은 줄 길 위에서만 움직인다([stopDragRange]).
+  final double? x;
+
+  /// 이름을 길 위에 쓸지.
+  final bool? labelAbove;
+
+  bool get isEmpty => x == null && labelAbove == null;
+
+  Map<String, Object> toJson() => {
+        if (x != null) 'x': x!,
+        if (labelAbove != null) 'above': labelAbove!,
+      };
+
+  static StopEdit? fromJson(Object? json) {
+    if (json is! Map<String, dynamic>) return null;
+    final x = json['x'];
+    final above = json['above'];
+    final edit = StopEdit(x: x is num ? x.toDouble() : null, labelAbove: above is bool ? above : null);
+    return edit.isEmpty ? null : edit;
+  }
+}
+
+/// 장소 막대를 끌 수 있는 x 범위: 그 줄의 곧은 길 구간 안이면서, 이름이 카드 밖으로 나가지 않게.
+({double min, double max}) stopDragRange(int row, int rows, {TripCardLayoutConfig config = const TripCardLayoutConfig()}) {
+  final c = config;
+  final last = row == rows - 1;
+  final double from;
+  final double to;
+  if (row.isEven) {
+    from = row == 0 ? c.startX : c.leftTurnX;
+    to = last ? c.pageWidth - c.endInset : c.rightTurnX;
+  } else {
+    from = last ? c.endInset : c.leftTurnX;
+    to = c.rightTurnX;
+  }
+  final margin = c.labelMaxWidth / 2 - 6;
+  return (min: math.max(from + 8, margin), max: math.min(to - 8, c.pageWidth - margin));
+}
+
+/// 기본 칸에 유저 편집을 적용한다. x는 [stopDragRange] 안으로 맞춘다.
+StopSlot applyStopEdit(
+  StopSlot slot,
+  StopEdit? edit,
+  int rows, {
+  TripCardLayoutConfig config = const TripCardLayoutConfig(),
+}) {
+  if (edit == null || edit.isEmpty) return slot;
+  final range = stopDragRange(slot.row, rows, config: config);
+  final x = edit.x;
+  return StopSlot(
+    index: slot.index,
+    x: x == null ? slot.x : x.clamp(range.min, range.max).toDouble(),
+    y: slot.y,
+    row: slot.row,
+    labelAbove: edit.labelAbove ?? slot.labelAbove,
+  );
 }

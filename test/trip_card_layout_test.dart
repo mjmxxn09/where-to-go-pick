@@ -108,4 +108,35 @@ void main() {
       expect(wrapByWords('가 나 다 라 마', 20, measure), isNull);
     });
   });
+
+  group('장소 막대 옮기기', () {
+    const config = TripCardLayoutConfig();
+    final layout = layoutTripCard(9);
+
+    test('같은 줄 곧은 길 안에서만, 이름이 카드 밖으로 나가지 않게', () {
+      for (var row = 0; row < layout.rows; row++) {
+        final r = stopDragRange(row, layout.rows);
+        expect(r.min, lessThan(r.max));
+        expect(r.min, greaterThanOrEqualTo(config.labelMaxWidth / 2 - 6));
+        expect(r.max, lessThanOrEqualTo(config.pageWidth - (config.labelMaxWidth / 2 - 6)));
+        if (row < layout.rows - 1) {
+          final turnX = row.isEven ? config.rightTurnX : config.leftTurnX;
+          expect(row.isEven ? r.max : r.min, row.isEven ? lessThan(turnX) : greaterThan(turnX));
+        }
+      }
+    });
+
+    test('옮긴 x는 범위 안으로 맞추고, 이름 위·아래를 뒤집을 수 있다', () {
+      final first = layout.stops.first;
+      final moved = applyStopEdit(first, const StopEdit(x: -500), layout.rows);
+      expect(moved.x, stopDragRange(0, layout.rows).min);
+      expect(moved.y, first.y);
+      expect(moved.labelAbove, first.labelAbove);
+
+      final flipped = applyStopEdit(first, const StopEdit(labelAbove: true), layout.rows);
+      expect(flipped.x, first.x);
+      expect(flipped.labelAbove, isTrue);
+      expect(applyStopEdit(first, null, layout.rows), same(first));
+    });
+  });
 }

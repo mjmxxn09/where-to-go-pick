@@ -22,11 +22,15 @@ class TripNoteView extends StatelessWidget {
     required this.trip,
     required this.page,
     this.paper = PaperStyle.grid,
+    this.stopEdits = const {},
   });
 
   final Trip trip;
   final TripCardPage page;
   final PaperStyle paper;
+
+  /// 유저가 옮긴 장소 막대(체크인 id → 편집).
+  final Map<String, StopEdit> stopEdits;
 
   static const config = TripCardLayoutConfig();
 
@@ -49,6 +53,7 @@ class TripNoteView extends StatelessWidget {
           paper: paper,
           title: _title(),
           subtitle: _subtitle(),
+          stopEdits: stopEdits,
         ),
       ),
     );
@@ -80,8 +85,10 @@ class _TripNotePainter extends CustomPainter {
     required this.paper,
     required this.title,
     required this.subtitle,
+    required this.stopEdits,
   });
 
+  final Map<String, StopEdit> stopEdits;
   final Trip trip;
   final TripCardPage page;
   final TripCardLayout layout;
@@ -104,8 +111,9 @@ class _TripNotePainter extends CustomPainter {
     final firstOfDay = <String>{for (final d in page.days) if (d.checkIns.isNotEmpty) d.checkIns.first.id};
     final dayOf = <String, int>{for (final d in page.days) for (final c in d.checkIns) c.id: d.index};
 
-    for (final slot in layout.stops) {
-      final c = checkIns[slot.index];
+    for (final base in layout.stops) {
+      final c = checkIns[base.index];
+      final slot = applyStopEdit(base, stopEdits[c.id], layout.rows, config: TripNoteView.config);
       final color = _dayColors[(dayOf[c.id] ?? 0) % _dayColors.length];
       final dir = slot.labelAbove ? -1.0 : 1.0;
       // 길을 가로지르는 눈금 + 이름 쪽으로 조금 더 나온 꼬리
@@ -322,5 +330,5 @@ class _TripNotePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _TripNotePainter old) =>
-      old.page != page || old.paper != paper || old.trip != trip || old.title != title;
+      old.page != page || old.paper != paper || old.trip != trip || old.title != title || old.stopEdits != stopEdits;
 }

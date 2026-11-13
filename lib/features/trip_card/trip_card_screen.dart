@@ -177,8 +177,10 @@ class _TripCardScreenState extends State<TripCardScreen> {
               Expanded(
                 child: TripCardEditor(
                   key: _editorKey,
-                  card: TripNoteView(trip: trip, page: page, paper: _paper),
+                  cardBuilder: (stopEdits) => TripNoteView(trip: trip, page: page, paper: _paper, stopEdits: stopEdits),
                   cardSize: TripNoteView.pageSize(page),
+                  layout: TripNoteView.layoutOf(page),
+                  checkInIds: [for (final c in page.checkIns) c.id],
                   pageKey: key,
                   store: _store,
                   book: _book,

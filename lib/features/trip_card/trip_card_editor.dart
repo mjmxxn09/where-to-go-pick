@@ -5,12 +5,14 @@ import 'package:flutter/material.dart';
 import '../../core/theme/app_theme.dart';
 import 'card_stickers.dart';
 import 'sticker_book.dart';
+import 'trip_card_layout.dart';
 
 /// 여행 노트 위에 스티커를 붙이고 옮기는 편집 화면.
 ///
 /// - 스티커 누르기: 고르기(맨 위로 올라옴). 빈 곳 누르기: 고르기 해제
 /// - 한 손가락으로 끌기: 옮기기. 두 손가락: 크기·회전
 /// - 마우스(웹)에서는 아래 도구 막대로 크기·회전·떼기
+/// - 장소 막대(눈금+시간+이름): 끌면 같은 줄 길 위에서 좌우로 옮겨진다. 누르면 도구 막대에서 이름 위·아래 뒤집기·원래 자리로
 /// - 서랍에서 카드로 끌어다 놓거나, 서랍 스티커를 누르면 카드 가운데에 붙는다([TripCardEditorState.addSticker]).
 ///
 /// 카드와 붙인 스티커는 [boundaryKey]의 `RepaintBoundary` 안에 있어 이미지 저장·공유에 그대로 쓴다.
@@ -18,17 +20,23 @@ import 'sticker_book.dart';
 class TripCardEditor extends StatefulWidget {
   const TripCardEditor({
     super.key,
-    required this.card,
+    required this.cardBuilder,
     required this.cardSize,
+    required this.layout,
+    required this.checkInIds,
     required this.pageKey,
     required this.store,
     required this.book,
     this.boundaryKey,
   });
 
-  /// 바탕 카드(TripNoteView).
-  final Widget card;
+  /// 바탕 카드(TripNoteView). 옮긴 장소 막대를 받아 그린다.
+  final Widget Function(Map<String, StopEdit> stopEdits) cardBuilder;
   final Size cardSize;
+  final TripCardLayout layout;
+
+  /// [layout]의 칸 순서대로 체크인 id.
+  final List<String> checkInIds;
   final String pageKey;
 
   /// null이면 아직 불러오는 중 — 보기만 한다.
@@ -43,6 +51,10 @@ class TripCardEditor extends StatefulWidget {
 class TripCardEditorState extends State<TripCardEditor> {
   final _boardKey = GlobalKey();
   String? _selectedId;
+
+  /// 고른 장소 막대(체크인 id). 스티커 고르기와 동시에 하나만.
+  String? _selectedStop;
+  String? _activeStop;
 
   // 끌기·두 손가락 제스처 상태
   String? _activeId;
@@ -67,6 +79,8 @@ class TripCardEditorState extends State<TripCardEditor> {
     if (oldWidget.pageKey != widget.pageKey) {
       _selectedId = null;
       _activeId = null;
+      _selectedStop = null;
+      _activeStop = null;
     }
   }
 
@@ -84,22 +98,103 @@ class TripCardEditorState extends State<TripCardEditor> {
       y: p.dy.clamp(0, size.height).toDouble(),
     );
     store.add(widget.pageKey, sticker);
-    setState(() => _selectedId = sticker.id);
+    setState(() {
+      _selectedId = sticker.id;
+      _selectedStop = null;
+    });
+  }
+
+  Map<String, StopEdit> get _stopEdits => widget.store?.stopEditsOf(widget.pageKey) ?? const {};
+
+  /// 편집을 적용한 장소 칸(체크인 id와 함께).
+  List<({String id, StopSlot slot})> get _stops {
+    final edits = _stopEdits;
+    final ids = widget.checkInIds;
+    return [
+      for (final base in widget.layout.stops)
+        if (base.index < ids.length)
+          (
+            id: ids[base.index],
+            slot: applyStopEdit(base, edits[ids[base.index]], widget.layout.rows),
+          ),
+    ];
+  }
+
+  /// 막대 둘레 + 이름 쪽 글자 영역.
+  Rect _stopRect(StopSlot s) {
+    final half = widget.layout.labelMaxWidth / 2;
+    return s.labelAbove
+        ? Rect.fromLTRB(s.x - half, s.y - 62, s.x + half, s.y + 14)
+        : Rect.fromLTRB(s.x - half, s.y - 14, s.x + half, s.y + 62);
+  }
+
+  String? _stopAt(Offset p) {
+    String? hit;
+    var best = double.infinity;
+    for (final s in _stops) {
+      if (!_stopRect(s.slot).contains(p)) continue;
+      final d = (s.slot.x - p.dx).abs();
+      if (d < best) {
+        best = d;
+        hit = s.id;
+      }
+    }
+    return hit;
+  }
+
+  StopSlot? _stopById(String? id) {
+    if (id == null) return null;
+    for (final s in _stops) {
+      if (s.id == id) return s.slot;
+    }
+    return null;
   }
 
   void _select(PlacedSticker? s) {
-    setState(() => _selectedId = s?.id);
+    setState(() {
+      _selectedId = s?.id;
+      if (s != null) _selectedStop = null;
+    });
     if (s != null) widget.store?.bringToFront(widget.pageKey, s.id);
   }
 
-  void _onTapUp(TapUpDetails d) => _select(stickerAt(_stickers, d.localPosition.dx, d.localPosition.dy));
+  void _selectStop(String? id) => setState(() {
+        _selectedStop = id;
+        if (id != null) _selectedId = null;
+      });
+
+  void _onTapUp(TapUpDetails d) {
+    final sticker = stickerAt(_stickers, d.localPosition.dx, d.localPosition.dy);
+    if (sticker != null) return _select(sticker);
+    final stop = _stopAt(d.localPosition);
+    if (stop != null) return _selectStop(stop);
+    _select(null);
+    _selectStop(null);
+  }
+
+  void _flipStop(String id) {
+    final slot = _stopById(id);
+    if (slot == null) return;
+    final old = _stopEdits[id];
+    widget.store?.setStopEdit(widget.pageKey, id, StopEdit(x: old?.x, labelAbove: !slot.labelAbove));
+  }
+
+  void _resetStop(String id) => widget.store?.setStopEdit(widget.pageKey, id, null);
 
   void _onScaleStart(ScaleStartDetails d) {
     var hit = stickerAt(_stickers, d.localFocalPoint.dx, d.localFocalPoint.dy);
     // 두 손가락이 스티커 밖에 있어도 고른 스티커의 크기·회전은 바꿀 수 있게
     if (hit == null && d.pointerCount >= 2) hit = _byId(_selectedId);
+    _activeStop = null;
     if (hit == null) {
       _activeId = null;
+      // 한 손가락으로 장소 막대를 잡으면 길 위에서 좌우로 옮긴다.
+      final stop = d.pointerCount == 1 ? _stopAt(d.localFocalPoint) : null;
+      if (stop != null) {
+        if (_selectedStop != stop) _selectStop(stop);
+        _activeStop = stop;
+        _lastFocal = d.localFocalPoint;
+      }
       return;
     }
     if (_selectedId != hit.id) _select(hit);
@@ -110,6 +205,8 @@ class TripCardEditorState extends State<TripCardEditor> {
   }
 
   void _onScaleUpdate(ScaleUpdateDetails d) {
+    final stopId = _activeStop;
+    if (stopId != null) return _moveStop(stopId, d);
     final s = _byId(_activeId);
     final store = widget.store;
     if (s == null || store == null) return;
@@ -128,9 +225,21 @@ class TripCardEditorState extends State<TripCardEditor> {
     );
   }
 
+  void _moveStop(String id, ScaleUpdateDetails d) {
+    final slot = _stopById(id);
+    final store = widget.store;
+    if (slot == null || store == null) return;
+    final dx = d.localFocalPoint.dx - _lastFocal.dx;
+    _lastFocal = d.localFocalPoint;
+    final range = stopDragRange(slot.row, widget.layout.rows);
+    final x = (slot.x + dx).clamp(range.min, range.max).toDouble();
+    store.setStopEdit(widget.pageKey, id, StopEdit(x: x, labelAbove: _stopEdits[id]?.labelAbove), save: false);
+  }
+
   void _onScaleEnd(ScaleEndDetails d) {
-    if (_activeId == null) return;
+    if (_activeId == null && _activeStop == null) return;
     _activeId = null;
+    _activeStop = null;
     widget.store?.persist();
   }
 
@@ -164,6 +273,8 @@ class TripCardEditorState extends State<TripCardEditor> {
     final size = widget.cardSize;
     final stickers = _stickers;
     final selected = _byId(_selectedId);
+    final selectedStopId = _selectedStop;
+    final selectedStop = _stopById(selectedStopId);
     final editable = widget.store != null;
 
     Widget board = SizedBox.fromSize(
@@ -179,7 +290,7 @@ class TripCardEditorState extends State<TripCardEditor> {
                 size: size,
                 child: Stack(
                   children: [
-                    Positioned.fill(child: widget.card),
+                    Positioned.fill(child: widget.cardBuilder(_stopEdits)),
                     for (final s in stickers) _stickerImage(s),
                   ],
                 ),
@@ -187,6 +298,7 @@ class TripCardEditorState extends State<TripCardEditor> {
             ),
           ),
           if (selected != null) _selectionFrame(selected),
+          if (selectedStop != null) _stopFrame(selectedStop),
         ],
       ),
     );
@@ -217,7 +329,14 @@ class TripCardEditorState extends State<TripCardEditor> {
     return Column(
       children: [
         Expanded(child: Center(child: FittedBox(fit: BoxFit.contain, child: board))),
-        SizedBox(height: 48, child: selected == null ? _hint(stickers.isEmpty) : _toolbar(selected)),
+        SizedBox(
+          height: 48,
+          child: selected != null
+              ? _toolbar(selected)
+              : selectedStop != null && selectedStopId != null
+                  ? _stopToolbar(selectedStopId)
+                  : _hint(stickers.isEmpty),
+        ),
       ],
     );
   }
@@ -259,9 +378,42 @@ class TripCardEditorState extends State<TripCardEditor> {
     );
   }
 
+  Widget _stopFrame(StopSlot s) {
+    final r = _stopRect(s).inflate(2);
+    return Positioned.fromRect(
+      rect: r,
+      child: IgnorePointer(
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: AppColors.primary.withValues(alpha: 0.06),
+            border: Border.all(color: AppColors.primary, width: 1.5),
+            borderRadius: BorderRadius.circular(8),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _stopToolbar(String id) => Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          TextButton.icon(
+            onPressed: () => _flipStop(id),
+            icon: const Icon(Icons.swap_vert),
+            label: const Text('이름 위·아래'),
+          ),
+          TextButton.icon(
+            onPressed: _stopEdits.containsKey(id) ? () => _resetStop(id) : null,
+            icon: const Icon(Icons.restart_alt),
+            label: const Text('원래 자리'),
+          ),
+          TextButton(onPressed: () => _selectStop(null), child: const Text('완료')),
+        ],
+      );
+
   Widget _hint(bool empty) => Center(
         child: Text(
-          empty ? '아래 서랍에서 스티커를 눌러 붙이거나 카드로 끌어다 놓아요' : '스티커를 눌러 고르면 옮기기·크기·회전을 바꿀 수 있어요',
+          empty ? '서랍에서 스티커를 눌러 붙여요 · 장소 막대는 끌어서 옮겨요' : '스티커·장소 막대를 눌러 고르면 옮기거나 바꿀 수 있어요',
           textAlign: TextAlign.center,
           style: const TextStyle(fontSize: 12.5, color: AppColors.textSecondary),
         ),

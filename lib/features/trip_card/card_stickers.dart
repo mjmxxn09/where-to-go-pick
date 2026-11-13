@@ -1,4 +1,4 @@
-/// 여행 카드에 유저가 붙인 스티커.
+/// 여행 카드 꾸미기: 유저가 붙인 스티커와 옮긴 장소 막대.
 ///
 /// - 카드는 길·시간·장소 이름만 그리고, 스티커는 유저가 직접 붙인다(빈 카드로 시작).
 /// - 좌표는 카드 좌표계(가로 358 기준, [TripCardLayoutConfig.pageWidth])의 스티커 **중심**이다.
@@ -159,20 +159,52 @@ Map<String, List<PlacedSticker>> decodeStickerPages(String? raw) {
   }
 }
 
-/// 카드별 스티커 목록. 바뀔 때마다 알리고 기기에 저장한다.
+String encodeStopEdits(Map<String, Map<String, StopEdit>> pages) => jsonEncode({
+      for (final page in pages.entries)
+        if (page.value.isNotEmpty) page.key: {for (final e in page.value.entries) e.key: e.value.toJson()},
+    });
+
+Map<String, Map<String, StopEdit>> decodeStopEdits(String? raw) {
+  if (raw == null || raw.isEmpty) return {};
+  try {
+    final json = jsonDecode(raw);
+    if (json is! Map<String, dynamic>) return {};
+    final pages = <String, Map<String, StopEdit>>{};
+    for (final page in json.entries) {
+      final edits = page.value;
+      if (edits is! Map<String, dynamic>) continue;
+      final map = <String, StopEdit>{};
+      for (final e in edits.entries) {
+        final edit = StopEdit.fromJson(e.value);
+        if (edit != null) map[e.key] = edit;
+      }
+      if (map.isNotEmpty) pages[page.key] = map;
+    }
+    return pages;
+  } on FormatException {
+    return {};
+  }
+}
+
+/// 카드별 꾸미기 상태: 붙인 스티커와 옮긴 장소 막대([StopEdit], 체크인 id별). 바뀔 때마다 알리고 기기에 저장한다.
 class CardStickerStore extends ChangeNotifier {
-  CardStickerStore._(this._prefs, this._pages);
+  CardStickerStore._(this._prefs, this._pages, this._stops);
 
   /// 저장하지 않는 메모리 전용(테스트·저장소를 못 열었을 때).
   factory CardStickerStore.memory([Map<String, List<PlacedSticker>>? pages]) =>
-      CardStickerStore._(null, {for (final e in (pages ?? const {}).entries) e.key: [...e.value]});
+      CardStickerStore._(null, {for (final e in (pages ?? const {}).entries) e.key: [...e.value]}, {});
 
   static const prefsKey = 'trip_card_stickers.v1';
+  static const stopsPrefsKey = 'trip_card_stops.v1';
 
   static Future<CardStickerStore> load() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      return CardStickerStore._(prefs, decodeStickerPages(prefs.getString(prefsKey)));
+      return CardStickerStore._(
+        prefs,
+        decodeStickerPages(prefs.getString(prefsKey)),
+        decodeStopEdits(prefs.getString(stopsPrefsKey)),
+      );
     } on Object {
       return CardStickerStore.memory();
     }
@@ -180,7 +212,23 @@ class CardStickerStore extends ChangeNotifier {
 
   final SharedPreferences? _prefs;
   final Map<String, List<PlacedSticker>> _pages;
+  final Map<String, Map<String, StopEdit>> _stops;
   var _seq = 0;
+
+  /// 이 카드에서 옮긴 장소 막대들(체크인 id → 편집).
+  Map<String, StopEdit> stopEditsOf(String pageKey) => Map.unmodifiable(_stops[pageKey] ?? const <String, StopEdit>{});
+
+  /// [edit]이 null이거나 비었으면 원래 자리로 되돌린다. [save]는 [update]와 같다.
+  void setStopEdit(String pageKey, String checkInId, StopEdit? edit, {bool save = true}) {
+    if (edit == null || edit.isEmpty) {
+      final page = _stops[pageKey];
+      page?.remove(checkInId);
+      if (page != null && page.isEmpty) _stops.remove(pageKey);
+    } else {
+      (_stops[pageKey] ??= {})[checkInId] = edit;
+    }
+    _changed(save: save);
+  }
 
   List<PlacedSticker> stickersOf(String pageKey) => List.unmodifiable(_pages[pageKey] ?? const <PlacedSticker>[]);
 
@@ -232,6 +280,7 @@ class CardStickerStore extends ChangeNotifier {
     final prefs = _prefs;
     if (prefs == null) return;
     await prefs.setString(prefsKey, encodeStickerPages(_pages));
+    await prefs.setString(stopsPrefsKey, encodeStopEdits(_stops));
   }
 
   void _changed({bool save = true}) {

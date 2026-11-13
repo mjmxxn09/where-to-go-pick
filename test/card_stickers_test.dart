@@ -113,4 +113,27 @@ void main() {
       expect(second.stickersOf('trip:all').single.name, 'move_bus');
     });
   });
+
+  group('장소 막대 편집 저장', () {
+    test('옮기고 되돌리고, 저장했다가 다시 연다', () async {
+      SharedPreferences.setMockInitialValues({});
+      final store = await CardStickerStore.load();
+      store
+        ..setStopEdit('trip:all', 'c1', const StopEdit(x: 120))
+        ..setStopEdit('trip:all', 'c2', const StopEdit(labelAbove: true));
+      expect(store.stopEditsOf('trip:all').keys, ['c1', 'c2']);
+      store.setStopEdit('trip:all', 'c2', null);
+      expect(store.stopEditsOf('trip:all').keys, ['c1']);
+      await store.persist();
+
+      final again = await CardStickerStore.load();
+      expect(again.stopEditsOf('trip:all')['c1']?.x, 120);
+      expect(again.stopEditsOf('trip:all')['c1']?.labelAbove, isNull);
+    });
+
+    test('깨진 저장값은 무시한다', () {
+      expect(decodeStopEdits('[]'), isEmpty);
+      expect(decodeStopEdits('{"p":{"c":{"x":"a"}}}'), isEmpty);
+    });
+  });
 }

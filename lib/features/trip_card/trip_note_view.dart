@@ -107,30 +107,44 @@ class _TripNotePainter extends CustomPainter {
     final firstOfDay = <String>{for (final d in page.days) if (d.checkIns.isNotEmpty) d.checkIns.first.id};
     final dayOf = <String, int>{for (final d in page.days) for (final c in d.checkIns) c.id: d.index};
 
+    // 반원 안쪽 그림: 그 줄 마지막 장소의 종류로 그린다.
+    for (final st in layout.stickers) {
+      final type = checkIns[st.stopIndex].type;
+      final scale = (st.maxWidth / doodleSize.width).clamp(0.6, 1.0).toDouble();
+      drawDoodle(
+        canvas,
+        type,
+        Offset(st.centerX - doodleSize.width * scale / 2, st.centerY - doodleSize.height * scale / 2),
+        scale: scale,
+      );
+    }
+
     for (final slot in layout.stops) {
       final c = checkIns[slot.index];
       final color = _dayColors[(dayOf[c.id] ?? 0) % _dayColors.length];
-      final dot = Offset(slot.x, slot.y);
-      canvas
-        ..drawCircle(dot, 6, Paint()..color = Colors.white)
-        ..drawCircle(
-          dot,
-          6,
-          Paint()
-            ..color = color
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = 3,
-        );
-      final time = multiDay && firstOfDay.contains(c.id) ? '${(dayOf[c.id] ?? 0) + 1}일차 · ${_hm(c.at)}' : _hm(c.at);
-      _text(canvas, time, Offset(slot.x, slot.y - 30), 11, color, center: true, weight: FontWeight.w700);
-      final nameBottom = _placeName(canvas, c.placeName, Offset(slot.x, slot.y + 12), layout.labelMaxWidth);
-      const iconScale = 0.8;
-      drawDoodle(
-        canvas,
-        c.type,
-        Offset(slot.x - doodleSize.width * iconScale / 2, nameBottom + 4),
-        scale: iconScale,
+      final dir = slot.labelAbove ? -1.0 : 1.0;
+      // 길을 가로지르는 눈금 + 이름 쪽으로 조금 더 나온 꼬리
+      canvas.drawLine(
+        Offset(slot.x, slot.y - 11 * dir),
+        Offset(slot.x, slot.y + 17 * dir),
+        Paint()
+          ..color = color
+          ..strokeWidth = 2
+          ..strokeCap = StrokeCap.round,
       );
+      final time = multiDay && firstOfDay.contains(c.id) ? '${(dayOf[c.id] ?? 0) + 1}일차 ${_hm(c.at)}' : _hm(c.at);
+      final timeTp = _layoutText(time, 10, color, weight: FontWeight.w700);
+      final nameTp = _layoutPlaceName(c.placeName, layout.labelMaxWidth);
+      if (slot.labelAbove) {
+        // 위쪽: [시간] [이름] [눈금] 순서로 아래에서 위로 쌓는다.
+        final nameTop = slot.y - 20 - nameTp.height;
+        nameTp.paint(canvas, Offset(slot.x - nameTp.width / 2, nameTop));
+        timeTp.paint(canvas, Offset(slot.x - timeTp.width / 2, nameTop - timeTp.height - 1));
+      } else {
+        // 아래쪽: [눈금] [시간] [이름]
+        timeTp.paint(canvas, Offset(slot.x - timeTp.width / 2, slot.y + 20));
+        nameTp.paint(canvas, Offset(slot.x - nameTp.width / 2, slot.y + 20 + timeTp.height + 1));
+      }
     }
 
     _startPin(canvas);
@@ -278,11 +292,11 @@ class _TripNotePainter extends CustomPainter {
     _text(canvas, '#어디갈지Pick', Offset(size.width - 120, y + 10), 20, AppColors.primaryDeep, font: AppFonts.handwriting);
   }
 
-  /// 장소 이름: 칸 폭 안에서 최대 2줄로 줄바꿈하고, 그래도 넘치면 21px → 14px까지 줄인다.
-  /// 그래도 안 되면 말줄임(…). 이름 아래쪽 y를 돌려준다(아이콘 위치 계산용).
-  double _placeName(Canvas canvas, String text, Offset topCenter, double maxWidth) {
+  /// 장소 이름: 칸 폭 안에서 최대 2줄로 줄바꿈하고, 그래도 넘치면 17px → 13px까지 줄인다.
+  /// 그래도 안 되면 말줄임(…).
+  TextPainter _layoutPlaceName(String text, double maxWidth) {
     late TextPainter tp;
-    for (var size = 21.0; size >= 14; size -= 1) {
+    for (var size = 17.0; size >= 13; size -= 1) {
       tp = TextPainter(
         text: TextSpan(
           text: text,
@@ -295,9 +309,14 @@ class _TripNotePainter extends CustomPainter {
       )..layout(maxWidth: maxWidth);
       if (!tp.didExceedMaxLines) break;
     }
-    tp.paint(canvas, Offset(topCenter.dx - tp.width / 2, topCenter.dy));
-    return topCenter.dy + tp.height;
+    return tp;
   }
+
+  TextPainter _layoutText(String text, double size, Color color, {FontWeight weight = FontWeight.w400}) =>
+      TextPainter(
+        text: TextSpan(text: text, style: TextStyle(fontSize: size, height: 1.1, color: color, fontWeight: weight)),
+        textDirection: TextDirection.ltr,
+      )..layout();
 
   void _text(
     Canvas canvas,

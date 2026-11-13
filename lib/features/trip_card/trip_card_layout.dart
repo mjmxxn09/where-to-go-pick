@@ -1,8 +1,10 @@
 /// 여행 노트(모눈종이 위 구불구불한 길) 배치 규칙. Flutter에 의존하지 않는 순수 계산이라 단위 테스트한다.
 ///
 /// 규칙
-/// - 체크인을 시간순으로 한 줄에 [TripCardLayoutConfig.stopsPerRow]곳씩 놓는다.
+/// - 체크인을 시간순으로 한 줄에 [TripCardLayoutConfig.stopsPerRow]곳씩 길 위에 놓고, 길을 가로지르는 눈금으로 표시한다.
 /// - 줄은 왼→오, 오→왼 번갈아 진행하고, 줄 끝에서 반원으로 꺾여 다음 줄로 내려간다.
+/// - 이름은 길 아래·위를 번갈아 쓴다(첫 장소는 아래). 같은 쪽 이웃과는 두 칸 떨어져 있어 넓게 쓸 수 있다.
+/// - 그림(스티커)은 장소마다 붙이지 않고, 길이 꺾이는 반원 안쪽 여백에 하나씩 놓는다.
 /// - 체크인이 늘면 줄이 늘고 페이지 높이도 늘어난다.
 library;
 
@@ -11,19 +13,21 @@ import '../trip/trip_models.dart';
 class TripCardLayoutConfig {
   const TripCardLayoutConfig({
     this.pageWidth = 358,
-    this.firstRowY = 150,
+    this.firstRowY = 170,
     this.rowGap = 140,
     this.startX = 24,
     this.turnInset = 80,
     this.endInset = 36,
-    this.stopsPerRow = 2,
-    this.footerHeight = 160,
+    this.stopsPerRow = 3,
+    this.stopsLeft = 100,
+    this.stopsRight = 254,
+    this.footerHeight = 150,
   });
 
   final double pageWidth;
   final double firstRowY;
 
-  /// 줄 간격 = 반원 지름. 위 줄 이름(최대 2줄)·아이콘과 아래 줄 시간 라벨이 겹치지 않는 최소값.
+  /// 줄 간격 = 반원 지름. 아래 이름(최대 2줄)과 다음 줄 위 이름이 겹치지 않는 최소값.
   final double rowGap;
   final double startX;
 
@@ -31,17 +35,21 @@ class TripCardLayoutConfig {
   final double turnInset;
   final double endInset;
   final int stopsPerRow;
+
+  /// 장소 눈금이 놓이는 가로 범위. 양 끝을 비워 반원 안쪽에 그림 자리를 남긴다.
+  final double stopsLeft;
+  final double stopsRight;
   final double footerHeight;
 
   double get radius => rowGap / 2;
-
-  /// 한 줄 안에서 장소 하나가 쓸 수 있는 가로 폭(점 사이 간격).
-  double get slotWidth => (rightTurnX - leftTurnX - 20) / stopsPerRow;
-
-  /// 장소 이름이 쓸 수 있는 최대 폭. 옆 장소 이름과 8px 이상 떨어진다.
-  double get labelMaxWidth => slotWidth - 8;
   double get leftTurnX => turnInset;
   double get rightTurnX => pageWidth - turnInset;
+
+  /// 눈금 사이 간격.
+  double get slotWidth => (stopsRight - stopsLeft) / stopsPerRow;
+
+  /// 장소 이름이 쓸 수 있는 최대 폭. 같은 쪽(위 또는 아래) 이웃은 두 칸 떨어져 있으므로 2칸 − 8px.
+  double get labelMaxWidth => slotWidth * 2 - 8;
 }
 
 /// 길 그리기 명령. 화면에서는 Flutter Path로 바꾼다.
@@ -71,18 +79,45 @@ class RoadArc extends RoadStep {
 }
 
 class StopSlot {
-  const StopSlot({required this.index, required this.x, required this.y, required this.row});
+  const StopSlot({
+    required this.index,
+    required this.x,
+    required this.y,
+    required this.row,
+    required this.labelAbove,
+  });
 
   final int index;
   final double x;
   final double y;
   final int row;
+
+  /// true면 이름을 길 위에, false면 아래에 쓴다.
+  final bool labelAbove;
+}
+
+/// 반원 안쪽 그림 자리. [afterRow] 줄 끝에서 꺾이는 곳이며, 그 줄 마지막 장소의 그림을 놓는다.
+class StickerSlot {
+  const StickerSlot({
+    required this.afterRow,
+    required this.stopIndex,
+    required this.centerX,
+    required this.centerY,
+    required this.maxWidth,
+  });
+
+  final int afterRow;
+  final int stopIndex;
+  final double centerX;
+  final double centerY;
+  final double maxWidth;
 }
 
 class TripCardLayout {
   const TripCardLayout({
     required this.road,
     required this.stops,
+    required this.stickers,
     required this.startX,
     required this.startY,
     required this.endX,
@@ -94,6 +129,7 @@ class TripCardLayout {
 
   final List<RoadStep> road;
   final List<StopSlot> stops;
+  final List<StickerSlot> stickers;
   final double startX;
   final double startY;
   final double endX;
@@ -123,24 +159,39 @@ TripCardLayout layoutTripCard(int stopCount, {TripCardLayoutConfig config = cons
     }
   }
 
-  // 한 줄 안 칸 위치: 줄 폭을 (칸 수 + 1)로 나눈 자리. 진행 방향을 따라 순서를 매긴다.
-  final usableLeft = c.leftTurnX + 10;
-  final usableRight = c.rightTurnX - 10;
-  final step = c.slotWidth;
+  // 칸 위치: 진행 방향을 따라 순서를 매긴다. 이름은 아래·위 번갈아.
   final stops = <StopSlot>[];
   for (var k = 0; k < stopCount; k++) {
     final row = k ~/ c.stopsPerRow;
     final slot = k % c.stopsPerRow;
     final y = c.firstRowY + row * c.rowGap;
-    final fromLeft = usableLeft + step * (slot + 0.5);
-    final x = row.isEven ? fromLeft : usableLeft + usableRight - fromLeft;
-    stops.add(StopSlot(index: k, x: x, y: y, row: row));
+    final fromLeft = c.stopsLeft + c.slotWidth * (slot + 0.5);
+    final x = row.isEven ? fromLeft : c.stopsLeft + c.stopsRight - fromLeft;
+    stops.add(StopSlot(index: k, x: x, y: y, row: row, labelAbove: k.isOdd));
+  }
+
+  // 반원 안쪽 그림 자리: 오른쪽 반원은 (줄 끝 장소 범위 ~ 반원) 사이, 왼쪽도 같은 방식.
+  final stickers = <StickerSlot>[];
+  for (var i = 0; i < rows - 1 && stopCount > 0; i++) {
+    final lastInRow = ((i + 1) * c.stopsPerRow - 1).clamp(0, stopCount - 1);
+    final rightSide = i.isEven;
+    final innerEdge = rightSide ? c.rightTurnX + c.radius - 10 : c.leftTurnX - c.radius + 10;
+    final labelEdge = rightSide ? c.stopsRight + c.slotWidth / 2 + 4 : c.stopsLeft - c.slotWidth / 2 - 4;
+    final width = (innerEdge - labelEdge).abs() - 6;
+    stickers.add(StickerSlot(
+      afterRow: i,
+      stopIndex: lastInRow.toInt(),
+      centerX: (innerEdge + labelEdge) / 2,
+      centerY: c.firstRowY + i * c.rowGap + c.rowGap / 2,
+      maxWidth: width,
+    ));
   }
 
   final lastY = c.firstRowY + (rows - 1) * c.rowGap;
   return TripCardLayout(
     road: road,
     stops: stops,
+    stickers: stickers,
     startX: c.startX,
     startY: c.firstRowY,
     endX: (rows - 1).isEven ? c.pageWidth - c.endInset : c.endInset,

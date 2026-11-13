@@ -1,8 +1,11 @@
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../trip/trip_models.dart';
 import 'doodles.dart';
+import 'sticker_book.dart';
 import 'trip_card_layout.dart';
 
 enum PaperStyle { grid, dot, plain }
@@ -22,12 +25,16 @@ class TripNoteView extends StatelessWidget {
     required this.page,
     this.paper = PaperStyle.grid,
     this.boundaryKey,
+    this.stickers,
   });
 
   final Trip trip;
   final TripCardPage page;
   final PaperStyle paper;
   final GlobalKey? boundaryKey;
+
+  /// 스티커 그림. null이거나 그림이 없는 종류는 선 그림으로 대신한다.
+  final StickerBook? stickers;
 
   @override
   Widget build(BuildContext context) {
@@ -50,6 +57,7 @@ class TripNoteView extends StatelessWidget {
               paper: paper,
               title: _title(),
               subtitle: _subtitle(),
+              stickers: stickers,
             ),
           ),
         ),
@@ -83,8 +91,10 @@ class _TripNotePainter extends CustomPainter {
     required this.paper,
     required this.title,
     required this.subtitle,
+    required this.stickers,
   });
 
+  final StickerBook? stickers;
   final Trip trip;
   final TripCardPage page;
   final TripCardLayout layout;
@@ -107,16 +117,32 @@ class _TripNotePainter extends CustomPainter {
     final firstOfDay = <String>{for (final d in page.days) if (d.checkIns.isNotEmpty) d.checkIns.first.id};
     final dayOf = <String, int>{for (final d in page.days) for (final c in d.checkIns) c.id: d.index};
 
-    // 반원 안쪽 그림: 그 줄 마지막 장소의 종류로 그린다.
+    // 반원 안쪽 그림: 그 줄 마지막 장소의 종류로 그린다. 스티커가 있으면 스티커, 없으면 선 그림.
     for (final st in layout.stickers) {
-      final type = checkIns[st.stopIndex].type;
-      final scale = (st.maxWidth / doodleSize.width).clamp(0.6, 1.0).toDouble();
-      drawDoodle(
-        canvas,
-        type,
-        Offset(st.centerX - doodleSize.width * scale / 2, st.centerY - doodleSize.height * scale / 2),
-        scale: scale,
-      );
+      final place = checkIns[st.stopIndex];
+      final image = stickers?.forPlace(place.type, place.placeName);
+      if (image != null) {
+        final side = st.maxWidth + 10;
+        _drawSticker(canvas, image, Rect.fromCenter(center: Offset(st.centerX, st.centerY), width: side, height: side));
+      } else {
+        final scale = (st.maxWidth / doodleSize.width).clamp(0.6, 1.0).toDouble();
+        drawDoodle(
+          canvas,
+          place.type,
+          Offset(st.centerX - doodleSize.width * scale / 2, st.centerY - doodleSize.height * scale / 2),
+          scale: scale,
+        );
+      }
+    }
+
+    // 출발 아래 이동 수단, 끝 깃발 위 발자국(스티커가 있을 때만)
+    final car = stickers?.move('move_car');
+    if (car != null) {
+      _drawSticker(canvas, car, Rect.fromLTWH(4, layout.startY + 14, 64, 64));
+    }
+    final walk = stickers?.move('move_walk');
+    if (walk != null) {
+      _drawSticker(canvas, walk, Rect.fromLTWH(layout.endX - 22, layout.endY - 96, 44, 58));
     }
 
     for (final slot in layout.stops) {
@@ -312,6 +338,13 @@ class _TripNotePainter extends CustomPainter {
     return tp;
   }
 
+  void _drawSticker(Canvas canvas, ui.Image image, Rect box) {
+    final src = Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble());
+    final k = (box.width / src.width) < (box.height / src.height) ? box.width / src.width : box.height / src.height;
+    final dst = Rect.fromCenter(center: box.center, width: src.width * k, height: src.height * k);
+    canvas.drawImageRect(image, src, dst, Paint()..filterQuality = FilterQuality.medium);
+  }
+
   TextPainter _layoutText(String text, double size, Color color, {FontWeight weight = FontWeight.w400}) =>
       TextPainter(
         text: TextSpan(text: text, style: TextStyle(fontSize: size, height: 1.1, color: color, fontWeight: weight)),
@@ -340,5 +373,5 @@ class _TripNotePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _TripNotePainter old) =>
-      old.page != page || old.paper != paper || old.trip != trip || old.title != title;
+      old.page != page || old.paper != paper || old.trip != trip || old.title != title || old.stickers != stickers;
 }

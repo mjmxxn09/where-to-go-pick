@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../trip/trip_models.dart';
+import 'sticker_book.dart';
 import 'trip_card_layout.dart';
 import 'trip_note_view.dart';
 
@@ -21,6 +22,23 @@ class _TripCardScreenState extends State<TripCardScreen> {
   PaperStyle _paper = PaperStyle.grid;
   int _pageIndex = 0;
   final _boundaryKey = GlobalKey();
+  Future<StickerBook>? _stickers;
+  StickerBook? _loadedStickers;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _stickers ??= StickerBook.load(DefaultAssetBundle.of(context)).then((book) {
+      _loadedStickers = book;
+      return book;
+    });
+  }
+
+  @override
+  void dispose() {
+    _loadedStickers?.dispose();
+    super.dispose();
+  }
 
   void _notReady(String what) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$what 기능은 다음 단계에서 붙여요.')));
@@ -95,11 +113,15 @@ class _TripCardScreenState extends State<TripCardScreen> {
               if (folder) const SizedBox(height: Gap.s),
               Expanded(
                 child: Center(
-                  child: TripNoteView(
-                    trip: trip,
-                    page: pages[index],
-                    paper: _paper,
-                    boundaryKey: _boundaryKey,
+                  child: FutureBuilder<StickerBook>(
+                    future: _stickers,
+                    builder: (context, snap) => TripNoteView(
+                      trip: trip,
+                      page: pages[index],
+                      paper: _paper,
+                      boundaryKey: _boundaryKey,
+                      stickers: snap.data,
+                    ),
                   ),
                 ),
               ),

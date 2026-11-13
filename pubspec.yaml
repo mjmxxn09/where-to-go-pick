@@ -23,6 +23,7 @@ flutter:
   uses-material-design: true
   assets:
     - assets/maps/korea-map.json
+    - assets/stickers/
 
   # 글꼴: Jua(제목·지도 라벨), Nanum Pen Script(여행 노트 손글씨) — 둘 다 SIL OFL.
   # assets/fonts/ 에 ttf를 넣고 아래 주석을 풀면 적용된다. 없으면 시스템 글꼴로 자동 대체된다.

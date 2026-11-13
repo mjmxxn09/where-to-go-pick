@@ -259,8 +259,6 @@ class _TripNotePainter extends CustomPainter {
           ..strokeWidth = 1.4
           ..strokeJoin = StrokeJoin.round,
       );
-    final label = page.isSingleDay && trip.days.length > 1 ? '${page.days.first.label} 끝!' : '여행 끝!';
-    _text(canvas, label, Offset(x, y + 14), 19, const Color(0xFFA3245F), center: true, font: AppFonts.handwriting);
   }
 
   void _footer(Canvas canvas, Size size, int count) {
@@ -274,7 +272,6 @@ class _TripNotePainter extends CustomPainter {
     final days = page.days.length;
     final text = days > 1 ? '다녀온 곳 $count곳 · $days일 동안' : '다녀온 곳 $count곳';
     _text(canvas, text, Offset(16, y + 10), 20, AppColors.mapLabel, font: AppFonts.handwriting);
-    _text(canvas, '#어디갈지Pick', Offset(size.width - 120, y + 10), 20, AppColors.primaryDeep, font: AppFonts.handwriting);
   }
 
   /// 장소 이름: 칸 폭 안에서 최대 2줄로 줄바꿈하고, 그래도 넘치면 17px → 13px까지 줄인다.

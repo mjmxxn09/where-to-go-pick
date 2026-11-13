@@ -100,8 +100,8 @@ class _TripNotePainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     _paper(canvas, size);
     _tape(canvas, size);
-    _text(canvas, title, const Offset(52, 24), 42, AppColors.mapLabel, font: AppFonts.handwriting);
-    _text(canvas, subtitle, const Offset(54, 68), 20, AppColors.textSecondary, font: AppFonts.handwriting);
+    _text(canvas, title, const Offset(52, 26), 34, AppColors.mapLabel, font: AppFonts.handwriting);
+    _text(canvas, subtitle, const Offset(54, 72), 17, AppColors.textSecondary, font: AppFonts.handwriting);
     drawDoodle(canvas, PlaceType.nature, const Offset(-2, 20));
 
     _road(canvas);
@@ -142,7 +142,6 @@ class _TripNotePainter extends CustomPainter {
 
     _startPin(canvas);
     _endFlag(canvas);
-    _footer(canvas, size, checkIns.length);
   }
 
   void _paper(Canvas canvas, Size size) {
@@ -241,8 +240,6 @@ class _TripNotePainter extends CustomPainter {
           ..strokeWidth = 1.4,
       )
       ..drawCircle(c, 3.5, Paint()..color = Colors.white);
-    final label = page.isSingleDay && trip.days.length > 1 && page.days.first.index > 0 ? '숙소 출발' : '출발';
-    _text(canvas, label, Offset(layout.startX + 12, layout.startY - 52), 19, const Color(0xFFA3245F), font: AppFonts.handwriting);
   }
 
   void _endFlag(Canvas canvas) {
@@ -267,19 +264,6 @@ class _TripNotePainter extends CustomPainter {
           ..strokeWidth = 1.4
           ..strokeJoin = StrokeJoin.round,
       );
-  }
-
-  void _footer(Canvas canvas, Size size, int count) {
-    final y = size.height - 44;
-    final dash = Paint()
-      ..color = const Color(0xFFC9C3DD)
-      ..strokeWidth = 1.5;
-    for (var x = 16.0; x < size.width - 16; x += 8) {
-      canvas.drawLine(Offset(x, y), Offset(x + 4, y), dash);
-    }
-    final days = page.days.length;
-    final text = days > 1 ? '다녀온 곳 $count곳 · $days일 동안' : '다녀온 곳 $count곳';
-    _text(canvas, text, Offset(16, y + 10), 20, AppColors.mapLabel, font: AppFonts.handwriting);
   }
 
   /// 장소 이름: 띄어쓰기 단위로 최대 2줄([wrapByWords]). 안 들어가면 15px → 12px까지 줄이고,

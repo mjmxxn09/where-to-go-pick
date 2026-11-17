@@ -28,6 +28,7 @@ class TripCardEditor extends StatefulWidget {
     required this.store,
     required this.book,
     this.boundaryKey,
+    this.hint,
   });
 
   /// 바탕 카드(TripNoteView). 옮긴 장소 막대를 받아 그린다.
@@ -43,6 +44,9 @@ class TripCardEditor extends StatefulWidget {
   final CardStickerStore? store;
   final StickerBook? book;
   final GlobalKey? boundaryKey;
+
+  /// 아무것도 고르지 않았을 때 카드 아래 안내 문구. null이면 기본 문구.
+  final String? hint;
 
   @override
   State<TripCardEditor> createState() => TripCardEditorState();
@@ -413,7 +417,7 @@ class TripCardEditorState extends State<TripCardEditor> {
 
   Widget _hint(bool empty) => Center(
         child: Text(
-          empty ? '서랍에서 스티커를 눌러 붙여요 · 장소 막대는 끌어서 옮겨요' : '스티커·장소 막대를 눌러 고르면 옮기거나 바꿀 수 있어요',
+          widget.hint ?? (empty ? '서랍에서 스티커를 눌러 붙여요 · 장소 막대는 끌어서 옮겨요' : '스티커·장소 막대를 눌러 고르면 옮기거나 바꿀 수 있어요'),
           textAlign: TextAlign.center,
           style: const TextStyle(fontSize: 12.5, color: AppColors.textSecondary),
         ),

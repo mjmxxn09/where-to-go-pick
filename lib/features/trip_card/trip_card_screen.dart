@@ -25,6 +25,8 @@ class _TripCardScreenState extends State<TripCardScreen> {
   TripCardMode _mode = TripCardMode.onePage;
   PaperStyle _paper = PaperStyle.grid;
   int _pageIndex = 0;
+  /// 크게 보기: 보기 방식·스티커 서랍·버튼을 접고 카드만 화면 가득 보여준다.
+  var _zoomed = false;
   final _boundaryKey = GlobalKey();
   final _editorKey = GlobalKey<TripCardEditorState>();
   var _loadStarted = false;
@@ -110,6 +112,13 @@ class _TripCardScreenState extends State<TripCardScreen> {
         title: const Text('여행 카드'),
         actions: [
           IconButton(
+            tooltip: _zoomed ? '작게 보기' : '크게 보기',
+            isSelected: _zoomed,
+            icon: const Icon(Icons.open_in_full),
+            selectedIcon: const Icon(Icons.close_fullscreen),
+            onPressed: () => setState(() => _zoomed = !_zoomed),
+          ),
+          IconButton(
             tooltip: '자동으로 꾸미기',
             icon: const Icon(Icons.auto_awesome),
             onPressed: ready ? () => _autoDecorate(page, key) : null,
@@ -134,22 +143,24 @@ class _TripCardScreenState extends State<TripCardScreen> {
       ),
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(Gap.m, 0, Gap.m, Gap.m),
+          padding: EdgeInsets.fromLTRB(_zoomed ? Gap.s : Gap.m, 0, _zoomed ? Gap.s : Gap.m, Gap.m),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              SegmentedButton<TripCardMode>(
-                segments: const [
-                  ButtonSegment(value: TripCardMode.onePage, label: Text('한 장에 모아보기')),
-                  ButtonSegment(value: TripCardMode.perDay, label: Text('하루씩 나눠보기')),
-                ],
-                selected: {_mode},
-                onSelectionChanged: (s) => setState(() {
-                  _mode = s.first;
-                  _pageIndex = 0;
-                }),
-              ),
-              const SizedBox(height: Gap.s + 2),
+              if (!_zoomed) ...[
+                SegmentedButton<TripCardMode>(
+                  segments: const [
+                    ButtonSegment(value: TripCardMode.onePage, label: Text('한 장에 모아보기')),
+                    ButtonSegment(value: TripCardMode.perDay, label: Text('하루씩 나눠보기')),
+                  ],
+                  selected: {_mode},
+                  onSelectionChanged: (s) => setState(() {
+                    _mode = s.first;
+                    _pageIndex = 0;
+                  }),
+                ),
+                const SizedBox(height: Gap.s + 2),
+              ],
               if (folder) ...[
                 Row(
                   children: [
@@ -184,29 +195,32 @@ class _TripCardScreenState extends State<TripCardScreen> {
                   store: _store,
                   book: _book,
                   boundaryKey: _boundaryKey,
+                  hint: _zoomed ? '크게 보는 중 · 스티커 서랍은 작게 보기에서 열려요' : null,
                 ),
               ),
-              StickerTray(book: _book, onPick: (name) => _editorKey.currentState?.addSticker(name)),
-              const SizedBox(height: Gap.s + 2),
-              Row(
-                children: [
-                  Expanded(
-                    child: FilledButton.icon(
-                      onPressed: () => _notReady('공유'),
-                      icon: const Icon(Icons.ios_share),
-                      label: Text(folder ? '이 장 공유' : '공유하기'),
+              if (!_zoomed) ...[
+                StickerTray(book: _book, onPick: (name) => _editorKey.currentState?.addSticker(name)),
+                const SizedBox(height: Gap.s + 2),
+                Row(
+                  children: [
+                    Expanded(
+                      child: FilledButton.icon(
+                        onPressed: () => _notReady('공유'),
+                        icon: const Icon(Icons.ios_share),
+                        label: Text(folder ? '이 장 공유' : '공유하기'),
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: Gap.s),
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: () => _notReady('이미지 저장'),
-                      icon: const Icon(Icons.download),
-                      label: Text(folder ? '${pages.length}장 모두 저장' : '이미지 저장'),
+                    const SizedBox(width: Gap.s),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () => _notReady('이미지 저장'),
+                        icon: const Icon(Icons.download),
+                        label: Text(folder ? '${pages.length}장 모두 저장' : '이미지 저장'),
+                      ),
                     ),
-                  ),
-                ],
-              ),
+                  ],
+                ),
+              ],
             ],
           ),
         ),

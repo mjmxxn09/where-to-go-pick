@@ -16,7 +16,6 @@ import '../features/splash/start_screen.dart';
 import '../features/trip/sample_trip.dart';
 import '../features/trip/trip_controller.dart';
 import '../features/trip/trip_screen.dart';
-import '../features/walk/walk_screen.dart';
 import 'app_scope.dart';
 
 class WhereToGoPickApp extends StatefulWidget {
@@ -160,7 +159,7 @@ class _StartGateState extends State<StartGate> {
   }
 }
 
-/// 하단 4탭: 내 지도 · 여행지 · 여행 중 · 산책
+/// 하단 3탭: 내 지도 · 여행지 · 여행 중
 class HomeShell extends StatefulWidget {
   const HomeShell({super.key});
 
@@ -179,7 +178,6 @@ class _HomeShellState extends State<HomeShell> {
       MyMapScreen(onNewTrip: () => _go(1), onOpenTrip: () => _go(2)),
       ExploreScreen(onTripStarted: () => _go(2)),
       const TripScreen(),
-      const WalkScreen(),
     ];
     return Scaffold(
       body: SafeArea(child: IndexedStack(index: _index, children: pages)),
@@ -192,7 +190,6 @@ class _HomeShellState extends State<HomeShell> {
           NavigationDestination(icon: Icon(Icons.map_outlined), selectedIcon: Icon(Icons.map), label: '내 지도'),
           NavigationDestination(icon: Icon(Icons.explore_outlined), selectedIcon: Icon(Icons.explore), label: '여행지'),
           NavigationDestination(icon: Icon(Icons.luggage_outlined), selectedIcon: Icon(Icons.luggage), label: '여행 중'),
-          NavigationDestination(icon: Icon(Icons.route_outlined), selectedIcon: Icon(Icons.route), label: '산책'),
         ],
       ),
     );

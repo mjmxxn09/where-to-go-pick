@@ -5,7 +5,7 @@ import 'package:where_to_go_pick/app/app.dart';
 import 'package:where_to_go_pick/core/config/app_config.dart';
 import 'package:where_to_go_pick/features/korea_map/korea_map_data.dart';
 
-/// 서버 없이(예시 데이터) 앱이 뜨고 4개 탭이 보이는지 확인하는 연기 테스트.
+/// 서버 없이(예시 데이터) 앱이 뜨고 하단 탭이 보이는지 확인하는 연기 테스트.
 /// 실제 지도 파일 대신 사각형 두 개짜리 작은 지도를 쓴다.
 KoreaMapData _tinyMap() => KoreaMapData.fromJson({
     'source': 'test',

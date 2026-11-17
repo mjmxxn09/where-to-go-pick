@@ -32,6 +32,9 @@ abstract final class AppFonts {
   static const title = 'Jua';
   /// 여행 노트 손글씨: 감자꽃(Gamja Flower).
   static const handwriting = 'GamjaFlower';
+
+  /// 앱 이름 "어디갈지 PICK!": 블랙한산스(Black Han Sans).
+  static const logo = 'BlackHanSans';
 }
 
 /// 레이아웃은 8dp 계열을 쓴다(픽클 디자인 규칙).

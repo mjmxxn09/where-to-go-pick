@@ -10,6 +10,9 @@ import '../core/theme/app_theme.dart';
 import '../features/explore/explore_screen.dart';
 import '../features/home/my_map_screen.dart';
 import '../features/korea_map/korea_map_data.dart';
+import '../features/splash/pickle_login_sheet.dart';
+import '../features/splash/splash_character.dart';
+import '../features/splash/start_screen.dart';
 import '../features/trip/sample_trip.dart';
 import '../features/trip/trip_controller.dart';
 import '../features/trip/trip_screen.dart';
@@ -66,8 +69,93 @@ class _WhereToGoPickAppState extends State<WhereToGoPickApp> {
         title: '어디갈지 Pick!',
         debugShowCheckedModeBanner: false,
         theme: buildAppTheme(),
-        home: const HomeShell(),
+        home: const StartGate(),
       ),
+    );
+  }
+}
+
+/// 시작 화면 → 홈.
+///
+/// - 실행할 때마다 픽클 친구 6명 중 한 명(바로 전과 다른 친구)이 얼굴을 내민다.
+/// - 이미 로그인돼 있으면 스플래시만 잠깐 보여 주고 홈으로 간다.
+/// - 아니면 "픽클 계정으로 시작하기"(이메일 로그인 시트) 또는 "카카오로 시작하기".
+/// - 서버 없이(예시 데이터) 실행하면 버튼을 누르는 대로 바로 홈으로 간다.
+class StartGate extends StatefulWidget {
+  const StartGate({super.key, this.splashDuration = const Duration(milliseconds: 1200)});
+
+  final Duration splashDuration;
+
+  @override
+  State<StartGate> createState() => _StartGateState();
+}
+
+class _StartGateState extends State<StartGate> {
+  SplashCharacter? _character;
+  var _signedIn = false;
+  var _entered = false;
+  var _started = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_started) return;
+    _started = true;
+    _load(AppScope.of(context));
+  }
+
+  Future<void> _load(AppScope scope) async {
+    final character = await SplashCharacterPicker().next();
+    var signedIn = false;
+    if (!scope.config.usePickleFixtures) {
+      try {
+        signedIn = await scope.pickle.me() != null;
+      } on Object {
+        signedIn = false; // 세션이 만료됐거나 서버에 닿지 않으면 로그인부터
+      }
+    }
+    if (!mounted) return;
+    setState(() {
+      _character = character;
+      _signedIn = signedIn;
+    });
+    if (signedIn) {
+      await Future<void>.delayed(widget.splashDuration);
+      if (mounted) setState(() => _entered = true);
+    }
+  }
+
+  Future<void> _pickleLogin() async {
+    final scope = AppScope.of(context);
+    if (scope.config.usePickleFixtures) {
+      setState(() => _entered = true);
+      return;
+    }
+    final ok = await showPickleLoginSheet(context, scope.pickle);
+    if (ok && mounted) setState(() => _entered = true);
+  }
+
+  void _kakaoLogin() {
+    if (AppScope.of(context).config.usePickleFixtures) {
+      setState(() => _entered = true);
+      return;
+    }
+    // 카카오 SDK·픽클 카카오 앱 키 연결 전(docs/architecture.md "카카오 로그인").
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('카카오 로그인은 준비 중이에요. 픽클 계정으로 시작해 주세요.')),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_entered) return const HomeShell();
+    final character = _character;
+    if (character == null) return const ColoredBox(color: Color(0xFFF8F5FF));
+    return StartScreen(
+      character: character,
+      busy: _signedIn,
+      onPickleLogin: _pickleLogin,
+      onKakaoLogin: _kakaoLogin,
     );
   }
 }

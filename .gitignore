@@ -35,3 +35,7 @@ env/*.json
 !env/*.example.json
 .env
 .env.*
+
+# 픽클 캐릭터 이미지는 회사 캐릭터라 공개 저장소에 올리지 않는다(각자 PC에만 둔다).
+# 준비 방법: assets/characters/splash/README.md
+assets/characters/splash/*.png

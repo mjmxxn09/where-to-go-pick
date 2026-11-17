@@ -24,15 +24,20 @@ flutter:
   assets:
     - assets/maps/korea-map.json
     - assets/stickers/
+    - assets/characters/splash/
 
   # 글꼴(SIL OFL)
   # - 감자꽃(Gamja Flower): 여행 노트 손글씨. 영문·기호 + 한글 완성형 11,172자만 남긴 파일(약 6MB).
   #   라이선스: assets/fonts/OFL-GamjaFlower.txt
+  # - 블랙한산스(Black Han Sans): 앱 이름 "어디갈지 PICK!". 라이선스: assets/fonts/OFL-BlackHanSans.txt
   # - Jua(제목·지도 라벨): 아직 파일 없음 → 시스템 글꼴로 대체. 넣을 때 아래 주석을 푼다.
   fonts:
     - family: GamjaFlower
       fonts:
         - asset: assets/fonts/GamjaFlower-Regular.ttf
+    - family: BlackHanSans
+      fonts:
+        - asset: assets/fonts/BlackHanSans-Regular.ttf
   #   - family: Jua
   #     fonts:
   #       - asset: assets/fonts/Jua-Regular.ttf

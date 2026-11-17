@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:where_to_go_pick/app/app.dart';
 import 'package:where_to_go_pick/core/config/app_config.dart';
 import 'package:where_to_go_pick/features/korea_map/korea_map_data.dart';
@@ -31,11 +32,17 @@ KoreaMapData _tinyMap() => KoreaMapData.fromJson({
   });
 
 void main() {
-  testWidgets('예시 데이터로 앱이 열린다', (tester) async {
+  testWidgets('예시 데이터로 앱이 열린다: 시작 화면 → 픽클 계정으로 시작하기 → 홈', (tester) async {
+    SharedPreferences.setMockInitialValues({});
     await tester.pumpWidget(WhereToGoPickApp(
       config: const AppConfig(pickleApiBaseUrl: '', lifeApiBaseUrl: '', appVersion: 'test'),
       mapData: Future.value(_tinyMap()),
     ));
+    await tester.pumpAndSettle();
+
+    expect(find.text('PICK!'), findsOneWidget);
+    expect(find.text('카카오로 시작하기'), findsOneWidget);
+    await tester.tap(find.text('픽클 계정으로 시작하기'));
     await tester.pumpAndSettle();
 
     expect(find.text('내 여행 지도'), findsWidgets);

@@ -3,6 +3,10 @@ import 'pickle_models.dart';
 
 /// 화면은 이 인터페이스만 본다. 서버 주소가 없으면 [FixturePickleRepository]가 쓰인다.
 abstract interface class PickleRepository {
+  /// 픽클 계정 로그인. 다른 기기에 활성 세션이 있으면 SessionConflictException —
+  /// [replaceExistingSession]은 사용자가 화면에서 동의했을 때만 true.
+  Future<void> login({required String email, required String password, bool replaceExistingSession = false});
+
   Future<UserProfile?> me();
   Future<List<InterestCategory>> interestCategories();
   Future<List<String>> myInterestKeys();
@@ -13,6 +17,10 @@ class RemotePickleRepository implements PickleRepository {
   RemotePickleRepository(this._client);
 
   final PickleApiClient _client;
+
+  @override
+  Future<void> login({required String email, required String password, bool replaceExistingSession = false}) =>
+      _client.login(email: email, password: password, replaceExistingSession: replaceExistingSession);
 
   @override
   Future<UserProfile?> me() async => await _client.hasSession ? _client.getMyProfile() : null;
@@ -31,6 +39,9 @@ class RemotePickleRepository implements PickleRepository {
 /// 서버 없이 화면을 확인하기 위한 예시 데이터. 실제 픽클 카테고리 키와 다를 수 있다.
 class FixturePickleRepository implements PickleRepository {
   const FixturePickleRepository();
+
+  @override
+  Future<void> login({required String email, required String password, bool replaceExistingSession = false}) async {}
 
   @override
   Future<UserProfile?> me() async => const UserProfile(subjectId: 'fixture-subject', nickname: '픽클러');

@@ -43,10 +43,7 @@ class _StickerTrayState extends State<StickerTray> {
     return SizedBox(
       height: StickerTray.height,
       child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.7),
-          borderRadius: BorderRadius.circular(16),
-        ),
+        decoration: AppDecorations.card,
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 6),
           child: Column(

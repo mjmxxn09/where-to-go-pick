@@ -41,6 +41,16 @@
 
 어느 쪽이든 VoteLock 저장소의 RFC/DEC 절차를 거쳐야 한다(픽클 Backend·PM 담당 확인).
 
+## 화면 스타일(2026-11-17 정리)
+
+디자인 캔버스 시안 A "포근한 카드" + 시안 B 하단 메뉴. 코드: `lib/core/theme/app_theme.dart`, `app_surfaces.dart`.
+
+- 바탕: 연보라 세로 그라데이션 + 오른쪽 위 분홍 번짐(`AppBackground`)
+- 카드: 흰색·반경 24·보랏빛 그림자(`AppCard`, `AppDecorations.card`)
+- 제목: 블랙한산스 남색(`titleStyle()`), 본문은 기본 글꼴
+- 버튼·칩·알약 탭: 둥근 알약 모양(테마), 주 버튼은 보라 + 보랏빛 그림자
+- 하단 메뉴: 흰 바탕 + 위쪽 얇은 선, 지금 탭은 보라 글자 + 아래 작은 점(`AppBottomBar`)
+
 ## 시작 화면(스플래시·로그인)
 
 코드: `lib/features/splash/`, 진입은 `lib/app/app.dart`의 `StartGate`.

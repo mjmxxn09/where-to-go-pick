@@ -52,7 +52,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
     return ListView(
       padding: const EdgeInsets.all(Gap.m),
       children: [
-        const Text('어디로 떠나볼까?', style: TextStyle(fontFamily: AppFonts.title, fontSize: 24)),
+        Text('어디로 떠나볼까?', style: titleStyle(26)),
         const SizedBox(height: Gap.s + 2),
         FutureBuilder<(List<InterestCategory>, List<String>)>(
           future: _interests,
@@ -106,7 +106,7 @@ class _Hint extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
         padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(16)),
+        decoration: AppDecorations.card,
         child: const Text(
           '도를 누르고, 가고 싶은 시·군·구를 골라봐!',
           textAlign: TextAlign.center,
@@ -126,7 +126,7 @@ class _CityCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(16)),
+      decoration: AppDecorations.card,
       child: Row(
         children: [
           Expanded(
@@ -134,7 +134,7 @@ class _CityCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(city.provinceName, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-                Text(city.name, style: const TextStyle(fontFamily: AppFonts.title, fontSize: 20)),
+                Text(city.name, style: titleStyle(22)),
                 FutureBuilder<DayWeather>(
                   future: life.weather(cityId: city.id, date: DateTime.now()),
                   builder: (context, snap) {

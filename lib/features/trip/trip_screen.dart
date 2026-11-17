@@ -49,7 +49,7 @@ class _TripScreenState extends State<TripScreen> {
         return ListView(
           padding: const EdgeInsets.all(Gap.m),
           children: [
-            Text(trip.title, style: const TextStyle(fontFamily: AppFonts.title, fontSize: 24)),
+            Text(trip.title, style: titleStyle(26)),
             Text('${trip.provinceName} · ${trip.lengthLabel}',
                 style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
             const SizedBox(height: Gap.s + 4),
@@ -106,7 +106,7 @@ class _WeatherCard extends StatelessWidget {
         final w = snap.data;
         return Container(
           padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(color: AppColors.tertiaryContainer, borderRadius: BorderRadius.circular(16)),
+          decoration: AppDecorations.card,
           child: w == null
               ? const SizedBox(height: 56, child: Center(child: CircularProgressIndicator()))
               : Row(
@@ -116,7 +116,7 @@ class _WeatherCard extends StatelessWidget {
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('${w.temperature}°', style: const TextStyle(fontFamily: AppFonts.title, fontSize: 24)),
+                        Text('${w.temperature}°', style: titleStyle(24)),
                         Text('${skyLabel(w.sky)} · 최저 ${w.min}° 최고 ${w.max}°',
                             style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
                       ],

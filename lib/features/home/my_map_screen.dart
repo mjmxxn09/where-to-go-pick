@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../app/app_scope.dart';
 import '../../core/pickle/pickle_models.dart';
+import '../../core/theme/app_surfaces.dart';
 import '../../core/theme/app_theme.dart';
 import '../korea_map/korea_map_data.dart';
 import '../korea_map/korea_map_view.dart';
@@ -33,30 +34,59 @@ class _MyMapScreenState extends State<MyMapScreen> {
     final paintedProvinces = visited.map((id) => id.substring(0, 2)).toSet().length;
 
     return ListView(
-      padding: const EdgeInsets.all(Gap.m),
+      padding: const EdgeInsets.fromLTRB(Gap.m, 18, Gap.m, Gap.l),
       children: [
         Row(
           children: [
-            const Expanded(
-              child: Text('내 여행 지도', style: TextStyle(fontFamily: AppFonts.title, fontSize: 26)),
+            FutureBuilder<PickleFriend?>(
+              future: _friend,
+              builder: (context, snap) => _FriendAvatar(friend: snap.data),
             ),
-            FilledButton.icon(
-              onPressed: widget.onNewTrip,
-              icon: const Icon(Icons.add),
-              label: const Text('새 여행'),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  FutureBuilder<PickleFriend?>(
+                    future: _friend,
+                    builder: (context, snap) => Text(
+                      snap.data == null ? '픽클 친구랑 다닌 곳' : '${snap.data!.name}랑 다닌 곳',
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.textSecondary),
+                    ),
+                  ),
+                  Text('내 여행 지도', style: titleStyle(26)),
+                ],
+              ),
+            ),
+            DecoratedBox(
+              decoration: const BoxDecoration(
+                borderRadius: BorderRadius.all(Radius.circular(999)),
+                boxShadow: AppDecorations.buttonShadow,
+              ),
+              child: FilledButton.icon(
+                onPressed: widget.onNewTrip,
+                icon: const Icon(Icons.add),
+                label: const Text('새 여행'),
+              ),
             ),
           ],
         ),
         const SizedBox(height: Gap.s + 4),
-        _ProgressCard(friend: _friend, painted: paintedProvinces),
+        _ProgressCard(painted: paintedProvinces),
         const SizedBox(height: Gap.s + 4),
-        FutureBuilder<KoreaMapData>(
-          future: scope.mapData,
-          builder: (context, snap) {
-            if (snap.hasError) return const _MapError();
-            if (!snap.hasData) return const SizedBox(height: 460, child: Center(child: CircularProgressIndicator()));
-            return KoreaMapView(data: snap.data!, mode: KoreaMapMode.visited, visitedCityIds: visited);
-          },
+        DecoratedBox(
+          decoration: const BoxDecoration(
+            borderRadius: BorderRadius.all(Radius.circular(24)),
+            boxShadow: AppDecorations.cardShadow,
+          ),
+          child: FutureBuilder<KoreaMapData>(
+            future: scope.mapData,
+            builder: (context, snap) {
+              if (snap.hasError) return const _MapError();
+              if (!snap.hasData) return const SizedBox(height: 460, child: Center(child: CircularProgressIndicator()));
+              return KoreaMapView(data: snap.data!, mode: KoreaMapMode.visited, visitedCityIds: visited);
+            },
+          ),
         ),
         const SizedBox(height: Gap.s + 4),
         ListenableBuilder(
@@ -64,19 +94,37 @@ class _MyMapScreenState extends State<MyMapScreen> {
           builder: (context, _) {
             final trip = scope.trip.trip;
             if (trip == null) return const SizedBox.shrink();
-            return Material(
-              color: AppColors.secondaryContainer,
-              borderRadius: BorderRadius.circular(16),
-              child: ListTile(
-                onTap: widget.onOpenTrip,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                leading: const Icon(Icons.luggage, color: AppColors.secondary),
-                title: Text(
-                  '${trip.title} · ${trip.dayCount}일차',
-                  style: const TextStyle(fontFamily: AppFonts.title, fontSize: 18),
-                ),
-                subtitle: Text('체크인 ${trip.checkIns.length}곳'),
-                trailing: const Icon(Icons.chevron_right),
+            return AppCard(
+              onTap: widget.onOpenTrip,
+              padding: const EdgeInsets.fromLTRB(10, 10, 14, 10),
+              child: Row(
+                children: [
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(color: AppColors.secondaryContainer, borderRadius: BorderRadius.circular(16)),
+                    child: const Icon(Icons.luggage, color: AppColors.secondary),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          '● 지금 여행 중',
+                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: AppColors.secondary),
+                        ),
+                        Text(
+                          '${trip.title} · ${trip.dayCount}일차',
+                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Text('체크인 ${trip.checkIns.length}곳',
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textSecondary)),
+                  const Icon(Icons.chevron_right, color: AppColors.muted),
+                ],
               ),
             );
           },
@@ -92,36 +140,37 @@ class _MyMapScreenState extends State<MyMapScreen> {
 }
 
 class _ProgressCard extends StatelessWidget {
-  const _ProgressCard({required this.friend, required this.painted});
+  const _ProgressCard({required this.painted});
 
-  final Future<PickleFriend?>? friend;
   final int painted;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(16)),
+    return AppCard(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       child: Row(
         children: [
-          FutureBuilder<PickleFriend?>(
-            future: friend,
-            builder: (context, snap) => _FriendAvatar(friend: snap.data),
+          Text.rich(
+            TextSpan(
+              children: [
+                TextSpan(text: '$painted', style: const TextStyle(fontSize: 38)),
+                const TextSpan(text: '/17', style: TextStyle(fontSize: 18, color: Color(0xFFA9A3D6))),
+              ],
+            ),
+            style: const TextStyle(fontFamily: AppFonts.title, height: 1, color: AppColors.primary),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('17개 시·도 중 $painted곳 색칠했어요', style: const TextStyle(fontWeight: FontWeight.w700)),
-                const SizedBox(height: 6),
+                const Text('시·도를 색칠했어요', style: TextStyle(fontWeight: FontWeight.w700)),
+                const SizedBox(height: 8),
                 ClipRRect(
                   borderRadius: BorderRadius.circular(99),
                   child: LinearProgressIndicator(
                     value: painted / 17,
-                    minHeight: 8,
-                    color: AppColors.primary,
-                    backgroundColor: const Color(0xFFECE9F7),
+                    minHeight: 10,
                     semanticsLabel: '색칠한 시·도',
                   ),
                 ),
@@ -145,12 +194,18 @@ class _FriendAvatar extends StatelessWidget {
     final f = friend;
     return Tooltip(
       message: f == null ? '픽클 친구' : '${f.name} · ${f.stage.label}',
-      child: CircleAvatar(
-        radius: 22,
-        backgroundColor: AppColors.primaryContainer,
+      child: Container(
+        width: 48,
+        height: 48,
+        alignment: Alignment.center,
+        decoration: const BoxDecoration(
+          color: AppColors.surface,
+          shape: BoxShape.circle,
+          boxShadow: [BoxShadow(color: Color(0x1F4A35C8), blurRadius: 16, offset: Offset(0, 6))],
+        ),
         child: Text(
           f == null ? '픽' : f.name.characters.first,
-          style: const TextStyle(fontFamily: AppFonts.title, fontSize: 18, color: AppColors.primaryDeep),
+          style: const TextStyle(fontFamily: AppFonts.title, fontSize: 20, color: AppColors.primaryDeep),
         ),
       ),
     );

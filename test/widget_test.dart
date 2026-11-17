@@ -1,8 +1,8 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:where_to_go_pick/app/app.dart';
 import 'package:where_to_go_pick/core/config/app_config.dart';
+import 'package:where_to_go_pick/core/theme/app_surfaces.dart';
 import 'package:where_to_go_pick/features/korea_map/korea_map_data.dart';
 
 /// 서버 없이(예시 데이터) 앱이 뜨고 하단 탭이 보이는지 확인하는 연기 테스트.
@@ -46,7 +46,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('내 여행 지도'), findsWidgets);
-    expect(find.byType(NavigationBar), findsOneWidget);
+    expect(find.byType(AppBottomBar), findsOneWidget);
     expect(find.text('여행지'), findsOneWidget);
   });
 }

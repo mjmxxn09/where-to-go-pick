@@ -105,10 +105,9 @@ class _TripCardScreenState extends State<TripCardScreen> {
     final ready = _store != null && _book != null;
 
     return Scaffold(
-      backgroundColor: AppColors.primaryContainer,
+      backgroundColor: AppColors.bgTop,
       appBar: AppBar(
         title: const Text('여행 카드'),
-        backgroundColor: AppColors.primaryContainer,
         actions: [
           IconButton(
             tooltip: '자동으로 꾸미기',

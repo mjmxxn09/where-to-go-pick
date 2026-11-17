@@ -6,6 +6,7 @@ import '../core/config/app_config.dart';
 import '../core/life/life_repository.dart';
 import '../core/pickle/pickle_api_client.dart';
 import '../core/pickle/pickle_repository.dart';
+import '../core/theme/app_surfaces.dart';
 import '../core/theme/app_theme.dart';
 import '../features/explore/explore_screen.dart';
 import '../features/home/my_map_screen.dart';
@@ -180,16 +181,14 @@ class _HomeShellState extends State<HomeShell> {
       const TripScreen(),
     ];
     return Scaffold(
-      body: SafeArea(child: IndexedStack(index: _index, children: pages)),
-      bottomNavigationBar: NavigationBar(
+      body: AppBackground(child: SafeArea(bottom: false, child: IndexedStack(index: _index, children: pages))),
+      bottomNavigationBar: AppBottomBar(
         selectedIndex: _index,
-        onDestinationSelected: _go,
-        backgroundColor: AppColors.surface,
-        indicatorColor: AppColors.primaryContainer,
-        destinations: const [
-          NavigationDestination(icon: Icon(Icons.map_outlined), selectedIcon: Icon(Icons.map), label: '내 지도'),
-          NavigationDestination(icon: Icon(Icons.explore_outlined), selectedIcon: Icon(Icons.explore), label: '여행지'),
-          NavigationDestination(icon: Icon(Icons.luggage_outlined), selectedIcon: Icon(Icons.luggage), label: '여행 중'),
+        onSelected: _go,
+        items: const [
+          AppBottomBarItem(icon: Icons.map_outlined, label: '내 지도'),
+          AppBottomBarItem(icon: Icons.explore_outlined, label: '여행지'),
+          AppBottomBarItem(icon: Icons.luggage_outlined, label: '여행 중'),
         ],
       ),
     );

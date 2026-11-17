@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../../app/app_scope.dart';
 import '../../core/theme/app_theme.dart';
 import '../trip/trip_models.dart';
+import '../votes/poll_screen.dart';
 import 'card_stickers.dart';
 import 'sticker_book.dart';
 import 'sticker_tray.dart';
@@ -96,8 +98,50 @@ class _TripCardScreenState extends State<TripCardScreen> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$what 기능은 다음 단계에서 붙여요.')));
   }
 
+  /// "한 표 핀" 옆의 장소들 = 투표 후보(최대 4곳).
+  List<CheckIn> _voteCandidates(TripCardPage page, String key) {
+    final store = _store;
+    if (store == null) return const [];
+    final layout = TripNoteView.layoutOf(page);
+    final edits = store.stopEditsOf(key);
+    final ids = [for (final c in page.checkIns) c.id];
+    final stops = [
+      for (final base in layout.stops)
+        if (base.index < ids.length)
+          () {
+            final slot = applyStopEdit(base, edits[ids[base.index]], layout.rows);
+            return (id: ids[base.index], x: slot.x, y: slot.y);
+          }(),
+    ];
+    final found = voteCandidates(store.stickersOf(key), stops, pinName: StickerBook.votePin);
+    return [
+      for (final id in found.take(4)) page.checkIns.firstWhere((c) => c.id == id),
+    ];
+  }
+
+  void _shareAsPoll(List<CheckIn> candidates) {
+    final trip = widget.trip;
+    final votes = AppScope.of(context).votes;
+    final place = trip.title.replaceAll(RegExp(r'\s*여행$'), '');
+    Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => PollScreen(
+        title: '여행 카드 투표',
+        poll: votes.shareCardPoll(
+          tripId: trip.id,
+          question: '$place 가면 어디부터 가야 해?',
+          places: [for (final c in candidates) (key: c.id, label: c.placeName)],
+        ),
+      ),
+    ));
+  }
+
   @override
   Widget build(BuildContext context) {
+    // 스티커가 바뀌면 투표 후보·공유 버튼도 다시 그린다.
+    return ListenableBuilder(listenable: Listenable.merge([if (_store != null) _store!]), builder: (context, _) => _build(context));
+  }
+
+  Widget _build(BuildContext context) {
     final trip = widget.trip;
     final pages = paginateTrip(trip, _mode);
     final index = _pageIndex < pages.length ? _pageIndex : 0;
@@ -105,6 +149,11 @@ class _TripCardScreenState extends State<TripCardScreen> {
     final page = pages[index];
     final key = cardPageKey(trip, _mode, page);
     final ready = _store != null && _book != null;
+    final candidates = _voteCandidates(page, key);
+    final voteHint = candidates.isEmpty
+        ? null
+        : '투표 후보 ${candidates.length}곳: ${candidates.map((c) => c.placeName).join(' · ')}'
+            '${candidates.length >= 2 ? ' — 공유하면 픽클 투표가 돼요' : ' — 한 곳 더 붙여 봐요'}';
 
     return Scaffold(
       backgroundColor: AppColors.bgTop,
@@ -195,7 +244,7 @@ class _TripCardScreenState extends State<TripCardScreen> {
                   store: _store,
                   book: _book,
                   boundaryKey: _boundaryKey,
-                  hint: _zoomed ? '크게 보는 중 · 스티커 서랍은 작게 보기에서 열려요' : null,
+                  hint: voteHint ?? (_zoomed ? '크게 보는 중 · 스티커 서랍은 작게 보기에서 열려요' : null),
                 ),
               ),
               if (!_zoomed) ...[
@@ -205,9 +254,9 @@ class _TripCardScreenState extends State<TripCardScreen> {
                   children: [
                     Expanded(
                       child: FilledButton.icon(
-                        onPressed: () => _notReady('공유'),
-                        icon: const Icon(Icons.ios_share),
-                        label: Text(folder ? '이 장 공유' : '공유하기'),
+                        onPressed: candidates.length >= 2 ? () => _shareAsPoll(candidates) : () => _notReady('공유'),
+                        icon: Icon(candidates.length >= 2 ? Icons.how_to_vote_outlined : Icons.ios_share),
+                        label: Text(candidates.length >= 2 ? '투표로 공유' : (folder ? '이 장 공유' : '공유하기')),
                       ),
                     ),
                     const SizedBox(width: Gap.s),

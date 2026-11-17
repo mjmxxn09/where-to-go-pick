@@ -40,10 +40,15 @@ class StickerBook {
 
   static const moveStickers = ['move_bus', 'move_car', 'move_bike', 'move_plane', 'move_ship', 'move_walk'];
 
-  /// 스티커 서랍 분류(장소 종류 + 이동). 그림이 없는 분류도 포함하므로 화면에서 [has]로 거른다.
+  /// 투표 스티커. [votePin]("한 표 핀")을 장소 옆에 붙이면 그 장소가 투표 후보가 된다(card_stickers.dart [voteCandidates]).
+  static const votePin = 'vote_pick';
+  static const voteStickers = [votePin, 'vote_vs', 'vote_box'];
+
+  /// 스티커 서랍 분류(장소 종류 + 투표 + 이동). 그림이 없는 분류도 포함하므로 화면에서 [has]로 거른다.
   static List<({String label, List<String> names})> get catalog => [
         for (final e in placeStickers.entries)
           if (e.value.isNotEmpty) (label: e.key.label, names: e.value),
+        (label: '투표', names: voteStickers),
         (label: '이동', names: moveStickers),
       ];
 
@@ -56,7 +61,7 @@ class StickerBook {
   bool get isEmpty => _images.isEmpty;
 
   static Future<StickerBook> load(AssetBundle bundle, {int decodeWidth = 256}) async {
-    final names = [for (final list in placeStickers.values) ...list, ...moveStickers];
+    final names = [for (final list in placeStickers.values) ...list, ...voteStickers, ...moveStickers];
     final images = <String, ui.Image>{};
     for (final name in names) {
       try {

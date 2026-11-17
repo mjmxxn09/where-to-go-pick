@@ -6,6 +6,7 @@ import '../core/config/app_config.dart';
 import '../core/life/life_repository.dart';
 import '../core/pickle/pickle_api_client.dart';
 import '../core/pickle/pickle_repository.dart';
+import '../core/votes/vote_repository.dart';
 import '../core/theme/app_surfaces.dart';
 import '../core/theme/app_theme.dart';
 import '../features/explore/explore_screen.dart';
@@ -20,13 +21,14 @@ import '../features/trip/trip_screen.dart';
 import 'app_scope.dart';
 
 class WhereToGoPickApp extends StatefulWidget {
-  const WhereToGoPickApp({super.key, required this.config, this.pickle, this.life, this.mapData});
+  const WhereToGoPickApp({super.key, required this.config, this.pickle, this.life, this.votes, this.mapData});
 
   final AppConfig config;
 
   /// 테스트에서 주입. null이면 설정에 따라 서버/예시 데이터를 고른다.
   final PickleRepository? pickle;
   final LifeRepository? life;
+  final VoteRepository? votes;
   final Future<KoreaMapData>? mapData;
 
   @override
@@ -36,6 +38,8 @@ class WhereToGoPickApp extends StatefulWidget {
 class _WhereToGoPickAppState extends State<WhereToGoPickApp> {
   late final PickleRepository _pickle = widget.pickle ?? _createPickle();
   late final LifeRepository _life = widget.life ?? const FixtureLifeRepository();
+  // 픽클 투표는 서버 쪽 정책(채널·지역 연결·다녀온 사람 표)이 정해질 때까지 예시 구현만 쓴다.
+  late final VoteRepository _votes = widget.votes ?? FixtureVoteRepository();
   // 서버가 없을 때는 예시 여행(강릉 2박 3일)으로 화면을 채운다.
   late final TripController _trip =
       TripController(initial: widget.config.useLifeFixtures ? sampleGangneungTrip() : null);
@@ -62,6 +66,7 @@ class _WhereToGoPickAppState extends State<WhereToGoPickApp> {
       config: widget.config,
       pickle: _pickle,
       life: _life,
+      votes: _votes,
       trip: _trip,
       mapData: _mapData,
       visitedCityIds: widget.config.useLifeFixtures ? sampleVisitedCityIds : const <String>{},

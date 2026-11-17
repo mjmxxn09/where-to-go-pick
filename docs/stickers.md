@@ -73,3 +73,8 @@ no text, no watermark, no photo realism, no background scenery, no people, no fr
 
 - 사용한 AI 서비스의 **상업적 이용 약관**(앱 배포 가능 여부, 출처 표기 의무)
 - 결과물에 실제 상호·로고·글자가 섞여 들어가지 않았는지
+
+## 투표 스티커 (2026-11-17)
+
+- `vote_pick`(한 표 핀), `vote_vs`(VS), `vote_box`(투표함) — 직접 그린 SVG를 512px PNG로 옮긴 것(외부 그림 아님).
+- 한 표 핀을 장소 막대 옆(90px 안)에 붙이면 그 장소가 투표 후보가 된다. 2곳 이상이면 공유 버튼이 "투표로 공유"로 바뀐다.

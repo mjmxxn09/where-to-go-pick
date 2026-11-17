@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../app/app_scope.dart';
 import '../../core/life/life_repository.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/votes/vote_repository.dart';
+import '../votes/pickle_ask_bubble.dart';
 import '../shared/weather_icon.dart';
 import '../trip_card/trip_card_screen.dart';
 import 'trip_controller.dart';
@@ -22,12 +24,55 @@ class _TripScreenState extends State<TripScreen> {
   Future<List<PlaceSuggestion>>? _places;
   Future<DayWeather>? _weather;
 
+  /// 다녀온 곳에 준 "나도 한 표".
+  Set<String> _myVotes = {};
+
+  /// 체크인 직후 픽클이의 질문(방금 간 곳, 그 전에 간 곳). null이면 말풍선 없음.
+  ({CheckIn just, CheckIn other})? _ask;
+  String? _picked;
+  int? _points;
+
   void _ensureLoaded(Trip trip) {
     if (_loadedCity == trip.cityId) return;
     final scope = AppScope.of(context);
     _loadedCity = trip.cityId;
     _places = scope.pickle.myInterestKeys().then((keys) => scope.life.places(cityId: trip.cityId, interestKeys: keys));
     _weather = scope.life.weather(cityId: trip.cityId, date: DateTime.now());
+    _myVotes = {};
+    scope.votes.myPlaceVotes(trip.cityId).then((v) {
+      if (mounted && _loadedCity == trip.cityId) setState(() => _myVotes = v);
+    });
+  }
+
+  void _checkIn(TripController controller, PlaceSuggestion place) {
+    controller.checkIn(place);
+    final checkIns = controller.trip?.checkIns ?? const <CheckIn>[];
+    final just = checkIns.where((c) => c.id == place.id).firstOrNull;
+    final before = just == null ? const <CheckIn>[] : checkIns.where((c) => c.id != place.id && !c.at.isAfter(just.at));
+    // 비교할 곳이 있어야 묻는다(그날 첫 체크인이면 묻지 않음).
+    setState(() {
+      _ask = just == null || before.isEmpty ? null : (just: just, other: before.last);
+      _picked = null;
+      _points = null;
+    });
+  }
+
+  Future<void> _answer(String cityId, bool justWon) async {
+    final ask = _ask;
+    if (ask == null) return;
+    final winner = justWon ? ask.just : ask.other;
+    final loser = justWon ? ask.other : ask.just;
+    setState(() => _picked = winner.placeName);
+    final points = await AppScope.of(context)
+        .votes
+        .answerPair(cityId: cityId, winnerPlaceId: winner.id, otherPlaceId: loser.id);
+    if (mounted && identical(_ask, ask)) setState(() => _points = points);
+  }
+
+  Future<void> _togglePlaceVote(String cityId, String placeId) async {
+    final on = !_myVotes.contains(placeId);
+    setState(() => _myVotes = {..._myVotes}..toggle(placeId, on));
+    await AppScope.of(context).votes.setPlaceVote(cityId: cityId, placeId: placeId, on: on);
   }
 
   @override
@@ -46,51 +91,89 @@ class _TripScreenState extends State<TripScreen> {
           );
         }
         _ensureLoaded(trip);
-        return ListView(
-          padding: const EdgeInsets.all(Gap.m),
+        final ask = _ask;
+        return Stack(
           children: [
-            Text(trip.title, style: titleStyle(26)),
-            Text('${trip.provinceName} · ${trip.lengthLabel}',
-                style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-            const SizedBox(height: Gap.s + 4),
-            _WeatherCard(future: _weather),
-            const SizedBox(height: Gap.s + 4),
-            _RouteToggle(controller: controller),
-            const SizedBox(height: Gap.s + 4),
-            SegmentedButton<bool>(
-              segments: const [
-                ButtonSegment(value: false, label: Text('명소')),
-                ButtonSegment(value: true, label: Text('맛집')),
-              ],
-              selected: {_food},
-              onSelectionChanged: (s) => setState(() => _food = s.first),
-            ),
-            const SizedBox(height: Gap.s),
-            FutureBuilder<List<PlaceSuggestion>>(
-              future: _places,
-              builder: (context, snap) {
-                final places = (snap.data ?? const <PlaceSuggestion>[]).where((p) => p.isFood == _food).toList();
-                if (snap.connectionState != ConnectionState.done) {
-                  return const Padding(padding: EdgeInsets.all(Gap.m), child: LinearProgressIndicator());
-                }
-                return Column(children: [for (final p in places) _PlaceTile(place: p, controller: controller)]);
-              },
-            ),
-            const SizedBox(height: Gap.m),
-            _Timeline(trip: trip),
-            const SizedBox(height: Gap.m),
-            OutlinedButton.icon(
-              onPressed: trip.checkIns.isEmpty
-                  ? null
-                  : () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => TripCardScreen(trip: trip))),
-              icon: const Icon(Icons.auto_stories_outlined),
-              label: const Text('여행 마치고 카드 만들기'),
-            ),
+            _list(context, controller, trip),
+            if (ask != null)
+              Positioned(
+                left: 10,
+                right: 12,
+                bottom: 12,
+                child: PickleAskBubble(
+                  justVisited: ask.just.placeName,
+                  other: ask.other.placeName,
+                  picked: _picked,
+                  points: _points,
+                  onPick: (justWon) => _answer(trip.cityId, justWon),
+                  onClose: () => setState(() => _ask = null),
+                ),
+              ),
           ],
         );
       },
     );
   }
+
+  Widget _list(BuildContext context, TripController controller, Trip trip) {
+    return ListView(
+      padding: const EdgeInsets.all(Gap.m),
+      children: [
+        Text(trip.title, style: titleStyle(26)),
+        Text('${trip.provinceName} · ${trip.lengthLabel}',
+            style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+        const SizedBox(height: Gap.s + 4),
+        _WeatherCard(future: _weather),
+        const SizedBox(height: Gap.s + 4),
+        _RouteToggle(controller: controller),
+        const SizedBox(height: Gap.s + 4),
+        SegmentedButton<bool>(
+          segments: const [
+            ButtonSegment(value: false, label: Text('명소')),
+            ButtonSegment(value: true, label: Text('맛집')),
+          ],
+          selected: {_food},
+          onSelectionChanged: (s) => setState(() => _food = s.first),
+        ),
+        const SizedBox(height: Gap.s),
+        FutureBuilder<List<PlaceSuggestion>>(
+          future: _places,
+          builder: (context, snap) {
+            final places = (snap.data ?? const <PlaceSuggestion>[]).where((p) => p.isFood == _food).toList();
+            if (snap.connectionState != ConnectionState.done) {
+              return const Padding(padding: EdgeInsets.all(Gap.m), child: LinearProgressIndicator());
+            }
+            return Column(children: [
+              for (final p in places)
+                _PlaceTile(
+                  place: p,
+                  done: controller.isCheckedIn(p.id),
+                  voted: _myVotes.contains(p.id),
+                  onCheckIn: () => _checkIn(controller, p),
+                  onVote: () => _togglePlaceVote(trip.cityId, p.id),
+                ),
+            ]);
+          },
+        ),
+        const SizedBox(height: Gap.m),
+        _Timeline(trip: trip),
+        const SizedBox(height: Gap.m),
+        OutlinedButton.icon(
+          onPressed: trip.checkIns.isEmpty
+              ? null
+              : () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => TripCardScreen(trip: trip))),
+          icon: const Icon(Icons.auto_stories_outlined),
+          label: const Text('여행 마치고 카드 만들기'),
+        ),
+        // 픽클이 말풍선이 마지막 항목을 가리지 않게
+        if (_ask != null) const SizedBox(height: 170),
+      ],
+    );
+  }
+}
+
+extension on Set<String> {
+  void toggle(String value, bool on) => on ? add(value) : remove(value);
 }
 
 class _WeatherCard extends StatelessWidget {
@@ -159,45 +242,113 @@ class _RouteToggle extends StatelessWidget {
 }
 
 class _PlaceTile extends StatelessWidget {
-  const _PlaceTile({required this.place, required this.controller});
+  const _PlaceTile({
+    required this.place,
+    required this.done,
+    required this.voted,
+    required this.onCheckIn,
+    required this.onVote,
+  });
 
   final PlaceSuggestion place;
-  final TripController controller;
+  final bool done;
+  final bool voted;
+  final VoidCallback onCheckIn;
+  final VoidCallback onVote;
 
   @override
   Widget build(BuildContext context) {
-    final done = controller.isCheckedIn(place.id);
-    return Card(
-      elevation: 0,
-      color: AppColors.surface,
+    final rank = place.visitorRank;
+    return Container(
       margin: const EdgeInsets.only(bottom: Gap.s),
-      child: ListTile(
-        title: Text(place.name, style: const TextStyle(fontWeight: FontWeight.w800)),
-        subtitle: Row(
-          children: [
-            Flexible(child: Text(place.meta)),
-            if (place.pickleVoteBadge != null) ...[
-              const SizedBox(width: 6),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: AppColors.secondaryContainer,
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  place.pickleVoteBadge!,
-                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFFA3245F)),
-                ),
-              ),
-            ],
-          ],
-        ),
-        trailing: done
-            ? const Chip(label: Text('체크인 완료'))
-            : FilledButton(onPressed: () => controller.checkIn(place), child: const Text('체크인')),
+      padding: const EdgeInsets.fromLTRB(14, 10, 10, 10),
+      decoration: AppDecorations.card,
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(place.name, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
+                Text(place.meta, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                if (rank != null || done) ...[
+                  const SizedBox(height: 3),
+                  Wrap(
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 6,
+                    runSpacing: 2,
+                    children: [
+                      if (rank != null) _RankLine(rank: rank),
+                      if (done) _VoteChip(voted: voted, onTap: onVote),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          done
+              ? Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  decoration: BoxDecoration(color: const Color(0xFFF0EDFF), borderRadius: BorderRadius.circular(12)),
+                  child: const Text('체크인 완료',
+                      style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: AppColors.primaryDeep)),
+                )
+              : FilledButton(onPressed: onCheckIn, child: const Text('체크인')),
+        ],
       ),
     );
   }
+}
+
+/// "다녀온 1,240명이 고른 해변 1위"
+class _RankLine extends StatelessWidget {
+  const _RankLine({required this.rank});
+
+  final VisitorRank rank;
+
+  static const _color = Color(0xFFA3245F);
+
+  @override
+  Widget build(BuildContext context) => Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.emoji_events_rounded, size: 14, color: Color(0xFFFFB300)),
+          const SizedBox(width: 3),
+          Flexible(
+            child: Text(rank.label, style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: _color)),
+          ),
+        ],
+      );
+}
+
+/// 다녀온 곳에만 보이는 "나도 한 표".
+class _VoteChip extends StatelessWidget {
+  const _VoteChip({required this.voted, required this.onTap});
+
+  final bool voted;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+        button: true,
+        toggled: voted,
+        child: Material(
+          color: voted ? _RankLine._color : const Color(0xFFFCEEF5),
+          borderRadius: BorderRadius.circular(99),
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(99),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              child: Text(
+                voted ? '내 표 ✓' : '나도 한 표',
+                style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: voted ? Colors.white : _RankLine._color),
+              ),
+            ),
+          ),
+        ),
+      );
 }
 
 class _Timeline extends StatelessWidget {

@@ -12,7 +12,11 @@ void main() {
   });
 
   test('대응표에 적힌 스티커 파일이 모두 저장소에 있다', () {
-    final names = [for (final list in StickerBook.placeStickers.values) ...list, ...StickerBook.moveStickers];
+    final names = [
+      for (final list in StickerBook.placeStickers.values) ...list,
+      ...StickerBook.voteStickers,
+      ...StickerBook.moveStickers,
+    ];
     for (final name in names) {
       expect(File('${StickerBook.folder}/$name.png').existsSync(), isTrue, reason: name);
     }

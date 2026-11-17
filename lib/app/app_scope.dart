@@ -3,6 +3,7 @@ import 'package:flutter/widgets.dart';
 import '../core/config/app_config.dart';
 import '../core/life/life_repository.dart';
 import '../core/pickle/pickle_repository.dart';
+import '../core/votes/vote_repository.dart';
 import '../features/korea_map/korea_map_data.dart';
 import '../features/trip/trip_controller.dart';
 
@@ -13,6 +14,7 @@ class AppScope extends InheritedWidget {
     required this.config,
     required this.pickle,
     required this.life,
+    required this.votes,
     required this.trip,
     required this.mapData,
     required this.visitedCityIds,
@@ -22,6 +24,9 @@ class AppScope extends InheritedWidget {
   final AppConfig config;
   final PickleRepository pickle;
   final LifeRepository life;
+
+  /// 픽클 투표(체크인 질문·나도 한 표·후보 투표·카드 투표). 지금은 예시 구현.
+  final VoteRepository votes;
   final TripController trip;
   final Future<KoreaMapData> mapData;
 
@@ -36,5 +41,5 @@ class AppScope extends InheritedWidget {
 
   @override
   bool updateShouldNotify(AppScope oldWidget) =>
-      pickle != oldWidget.pickle || life != oldWidget.life || trip != oldWidget.trip;
+      pickle != oldWidget.pickle || life != oldWidget.life || votes != oldWidget.votes || trip != oldWidget.trip;
 }

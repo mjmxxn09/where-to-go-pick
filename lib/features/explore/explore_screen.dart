@@ -7,6 +7,7 @@ import '../../core/theme/app_theme.dart';
 import '../korea_map/korea_map_data.dart';
 import '../korea_map/korea_map_view.dart';
 import '../shared/weather_icon.dart';
+import '../votes/poll_screen.dart';
 
 /// 2 · 여행지 고르기: 관심사(픽클 계정) → 도 → 시·군·구 → 여행 만들기.
 class ExploreScreen extends StatefulWidget {
@@ -36,6 +37,42 @@ class _ExploreScreenState extends State<ExploreScreen> {
     super.didChangeDependencies();
     final pickle = AppScope.of(context).pickle;
     _interests ??= (() async => (await pickle.interestCategories(), await pickle.myInterestKeys()))();
+  }
+
+  /// ♡로 담은 여행지 후보(최대 4곳). 2곳부터 친구한테 물어볼 수 있다.
+  final List<SelectedCity> _candidates = [];
+
+  bool _isCandidate(SelectedCity c) => _candidates.any((x) => x.id == c.id);
+
+  void _toggleCandidate(SelectedCity c) => setState(() {
+        if (_isCandidate(c)) {
+          _candidates.removeWhere((x) => x.id == c.id);
+        } else {
+          _candidates.add(c);
+          if (_candidates.length > 4) _candidates.removeAt(0);
+        }
+      });
+
+  void _askFriends() {
+    final votes = AppScope.of(context).votes;
+    final picked = List.of(_candidates);
+    Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (routeContext) => PollScreen(
+        poll: votes.askFriends(
+          question: '이번 주말 어디 갈까?',
+          cities: [for (final c in picked) (key: c.id, label: c.name)],
+        ),
+        winnerAction: (
+          label: (w) => '${w.label}로 여행 만들기',
+          onPressed: (w) {
+            Navigator.of(routeContext).pop();
+            final city = picked.firstWhere((c) => c.id == w.key, orElse: () => picked.first);
+            setState(() => _city = city);
+            _startTrip();
+          },
+        ),
+      ),
+    ));
   }
 
   void _startTrip() {
@@ -94,7 +131,15 @@ class _ExploreScreenState extends State<ExploreScreen> {
         if (_city == null)
           const _Hint()
         else
-          _CityCard(city: _city!, life: scope.life, onStart: _startTrip),
+          _CityCard(
+            city: _city!,
+            life: scope.life,
+            onStart: _startTrip,
+            isCandidate: _isCandidate(_city!),
+            onToggleCandidate: () => _toggleCandidate(_city!),
+          ),
+        const SizedBox(height: Gap.s),
+        _CandidateBar(candidates: _candidates, onAsk: _askFriends),
       ],
     );
   }
@@ -116,11 +161,19 @@ class _Hint extends StatelessWidget {
 }
 
 class _CityCard extends StatelessWidget {
-  const _CityCard({required this.city, required this.life, required this.onStart});
+  const _CityCard({
+    required this.city,
+    required this.life,
+    required this.onStart,
+    required this.isCandidate,
+    required this.onToggleCandidate,
+  });
 
   final SelectedCity city;
   final LifeRepository life;
   final VoidCallback onStart;
+  final bool isCandidate;
+  final VoidCallback onToggleCandidate;
 
   @override
   Widget build(BuildContext context) {
@@ -153,7 +206,77 @@ class _CityCard extends StatelessWidget {
               ],
             ),
           ),
+          IconButton(
+            tooltip: isCandidate ? '후보에서 빼기' : '후보에 담기',
+            isSelected: isCandidate,
+            onPressed: onToggleCandidate,
+            style: IconButton.styleFrom(
+              backgroundColor: isCandidate ? const Color(0xFFFFE3EF) : const Color(0xFFF6F3FF),
+              foregroundColor: _heart,
+            ),
+            icon: const Icon(Icons.favorite_border),
+            selectedIcon: const Icon(Icons.favorite),
+          ),
+          const SizedBox(width: 6),
           FilledButton(onPressed: onStart, child: const Text('여행 만들기')),
+        ],
+      ),
+    );
+  }
+}
+
+const _heart = Color(0xFFE0569B);
+
+/// 담은 후보 줄. 2곳부터 "친구한테 물어보기"(픽클 투표로 공유).
+class _CandidateBar extends StatelessWidget {
+  const _CandidateBar({required this.candidates, required this.onAsk});
+
+  final List<SelectedCity> candidates;
+  final VoidCallback onAsk;
+
+  @override
+  Widget build(BuildContext context) {
+    final names = candidates.map((c) => c.name.replaceAll(RegExp(r'(시|군|구)$'), '')).join(' · ');
+    final n = candidates.length;
+    return Container(
+      constraints: const BoxConstraints(minHeight: 52),
+      padding: const EdgeInsets.fromLTRB(14, 4, 5, 4),
+      decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.75), borderRadius: BorderRadius.circular(99)),
+      child: Row(
+        children: [
+          Icon(n == 0 ? Icons.favorite_border : Icons.favorite, size: 20, color: _heart),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(n == 0 ? '고민되면 ♡로 후보에 담아요' : '갈까 말까 후보 $n곳',
+                    style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800)),
+                Text(
+                  n == 0
+                      ? '2곳부터 친구한테 투표로 물어볼 수 있어요'
+                      : n == 1
+                          ? '$names · 하나 더 담으면 물어볼 수 있어요'
+                          : names,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: AppColors.textSecondary),
+                ),
+              ],
+            ),
+          ),
+          if (n >= 2)
+            FilledButton.tonal(
+              onPressed: onAsk,
+              style: FilledButton.styleFrom(
+                backgroundColor: Colors.white,
+                foregroundColor: AppColors.primaryDeep,
+                minimumSize: const Size(0, 42),
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+              ),
+              child: const Text('친구한테 물어보기'),
+            ),
         ],
       ),
     );

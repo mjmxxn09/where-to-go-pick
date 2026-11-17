@@ -95,6 +95,32 @@ PlacedSticker? stickerAt(List<PlacedSticker> stickers, double px, double py) {
   return null;
 }
 
+/// "한 표 핀"이 붙은 자리에서 가장 가까운 장소 = 투표 후보. 붙인 순서대로, 같은 장소는 한 번만.
+/// [stops]는 편집을 적용한 장소 칸(체크인 id + 막대 위치). [maxDistance]보다 멀면 후보로 보지 않는다.
+List<String> voteCandidates(
+  List<PlacedSticker> stickers,
+  List<({String id, double x, double y})> stops, {
+  String pinName = 'vote_pick',
+  double maxDistance = 90,
+}) {
+  final out = <String>[];
+  for (final s in stickers) {
+    if (s.name != pinName) continue;
+    String? best;
+    var bestDistance = double.infinity;
+    for (final p in stops) {
+      final dx = p.x - s.x, dy = p.y - s.y;
+      final d = dx * dx + dy * dy;
+      if (d < bestDistance) {
+        bestDistance = d;
+        best = p.id;
+      }
+    }
+    if (best != null && bestDistance <= maxDistance * maxDistance && !out.contains(best)) out.add(best);
+  }
+  return out;
+}
+
 /// 카드 한 장을 가리키는 저장 키.
 String cardPageKey(Trip trip, TripCardMode mode, TripCardPage page) {
   if (mode == TripCardMode.onePage || trip.days.length <= 1 || page.days.isEmpty) return '${trip.id}:all';

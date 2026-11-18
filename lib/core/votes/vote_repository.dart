@@ -130,6 +130,9 @@ abstract interface class VoteRepository {
   /// 여행 카드의 "한 표 핀" 후보로 투표를 올린다(2~4곳).
   Future<Poll> shareCardPoll({required String tripId, required String question, required List<PollCandidate> places});
 
+  /// 물어본 투표를 다시 연다. 없거나 지워졌으면 null.
+  Future<Poll?> poll(String pollId);
+
   Future<Poll> vote(String pollId, String optionKey);
 
   Future<Poll> close(String pollId);
@@ -194,6 +197,9 @@ class FixtureVoteRepository implements VoteRepository {
   @override
   Future<Poll> shareCardPoll({required String tripId, required String question, required List<PollCandidate> places}) async =>
       _create(PollKind.card, question, places);
+
+  @override
+  Future<Poll?> poll(String pollId) async => _polls[pollId];
 
   Poll _get(String id) => _polls[id] ?? (throw StateError('없는 투표: $id'));
 

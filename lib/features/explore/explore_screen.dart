@@ -4,10 +4,12 @@ import '../../app/app_scope.dart';
 import '../../core/life/life_repository.dart';
 import '../../core/pickle/pickle_models.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/votes/vote_repository.dart';
 import '../korea_map/korea_map_data.dart';
 import '../korea_map/korea_map_view.dart';
 import '../shared/weather_icon.dart';
 import '../votes/poll_screen.dart';
+import 'trip_candidates.dart';
 
 /// 2 · 여행지 고르기: 관심사(픽클 계정) → 도 → 시·군·구 → 여행 만들기.
 class ExploreScreen extends StatefulWidget {
@@ -39,47 +41,92 @@ class _ExploreScreenState extends State<ExploreScreen> {
     _interests ??= (() async => (await pickle.interestCategories(), await pickle.myInterestKeys()))();
   }
 
-  /// ♡로 담은 여행지 후보(최대 4곳). 2곳부터 친구한테 물어볼 수 있다.
-  final List<SelectedCity> _candidates = [];
+  /// ♡로 담은 여행지 후보(최대 4곳, 기기에 저장). 2곳부터 친구한테 물어볼 수 있다.
+  TripCandidates? _cands;
 
-  bool _isCandidate(SelectedCity c) => _candidates.any((x) => x.id == c.id);
+  /// 최근 물어본 투표 불러오기(투표 화면에서 돌아오면 다시 불러온다).
+  final Map<String, Future<Poll?>> _pollFutures = {};
 
-  void _toggleCandidate(SelectedCity c) => setState(() {
-        if (_isCandidate(c)) {
-          _candidates.removeWhere((x) => x.id == c.id);
-        } else {
-          _candidates.add(c);
-          if (_candidates.length > 4) _candidates.removeAt(0);
-        }
-      });
+  @override
+  void initState() {
+    super.initState();
+    TripCandidates.load().then((store) {
+      if (!mounted) return;
+      store.addListener(_onCandidatesChanged);
+      setState(() => _cands = store);
+    });
+  }
+
+  @override
+  void dispose() {
+    _cands?.removeListener(_onCandidatesChanged);
+    super.dispose();
+  }
+
+  void _onCandidatesChanged() {
+    if (mounted) setState(() {});
+  }
+
+  bool _isCandidate(SelectedCity c) => _cands?.contains(c.id) ?? false;
+
+  void _toggleCandidate(SelectedCity c) => _cands?.toggle(c);
 
   void _askFriends() {
+    final store = _cands;
+    if (store == null) return;
+    final picked = List.of(store.items);
+    final poll = AppScope.of(context).votes.askFriends(
+      question: '이번 주말 어디 갈까?',
+      cities: [for (final c in picked) (key: c.id, label: c.name)],
+    ).then((p) {
+      // 후보를 나중에 비워도 이 투표는 따로 남는다.
+      store.addPoll(AskedPoll(id: p.id, cities: picked));
+      return p;
+    });
+    _openPoll(poll, picked);
+  }
+
+  void _openPoll(Future<Poll> poll, List<SelectedCity> cities) {
+    Navigator.of(context)
+        .push(MaterialPageRoute<void>(
+          builder: (routeContext) => PollScreen(
+            poll: poll,
+            winnerAction: cities.isEmpty
+                ? null
+                : (
+                    label: (w) => '${w.label}로 여행 만들기',
+                    onPressed: (w) {
+                      Navigator.of(routeContext).pop();
+                      final city = cities.firstWhere((c) => c.id == w.key, orElse: () => cities.first);
+                      setState(() => _city = city);
+                      _startTrip();
+                    },
+                  ),
+          ),
+        ))
+        .then((_) {
+      if (mounted) setState(_pollFutures.clear);
+    });
+  }
+
+  void _openAskedPoll(AskedPoll asked) {
     final votes = AppScope.of(context).votes;
-    final picked = List.of(_candidates);
-    Navigator.of(context).push(MaterialPageRoute<void>(
-      builder: (routeContext) => PollScreen(
-        poll: votes.askFriends(
-          question: '이번 주말 어디 갈까?',
-          cities: [for (final c in picked) (key: c.id, label: c.name)],
-        ),
-        winnerAction: (
-          label: (w) => '${w.label}로 여행 만들기',
-          onPressed: (w) {
-            Navigator.of(routeContext).pop();
-            final city = picked.firstWhere((c) => c.id == w.key, orElse: () => picked.first);
-            setState(() => _city = city);
-            _startTrip();
-          },
-        ),
-      ),
-    ));
+    _openPoll(votes.poll(asked.id).then((p) => p ?? (throw StateError('없는 투표'))), asked.cities);
   }
 
   void _startTrip() {
     final city = _city;
     if (city == null) return;
     AppScope.of(context).trip.startTrip(cityId: city.id, cityName: city.name, provinceName: city.provinceName);
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${city.name} 여행을 시작했어요!')));
+    // 후보 중 한 곳으로 떠나면 고민이 끝난 것 → 후보를 비운다(물어본 투표는 남는다).
+    final store = _cands;
+    final removed = store != null && store.contains(city.id) ? store.clear() : const <SelectedCity>[];
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(removed.isEmpty ? '${city.name} 여행을 시작했어요!' : '${city.name} 여행을 시작했어요! 갈까 말까 후보는 비웠어요'),
+      action: removed.isEmpty || store == null
+          ? null
+          : SnackBarAction(label: '되돌리기', onPressed: () => store.restore(removed)),
+    ));
     widget.onTripStarted();
   }
 
@@ -139,7 +186,14 @@ class _ExploreScreenState extends State<ExploreScreen> {
             onToggleCandidate: () => _toggleCandidate(_city!),
           ),
         const SizedBox(height: Gap.s),
-        _CandidateBar(candidates: _candidates, onAsk: _askFriends),
+        _CandidateBar(candidates: _cands?.items ?? const [], onAsk: _askFriends),
+        if (_cands?.polls.firstOrNull case final asked?) ...[
+          const SizedBox(height: Gap.s),
+          _RecentPoll(
+            poll: _pollFutures.putIfAbsent(asked.id, () => scope.votes.poll(asked.id)),
+            onOpen: () => _openAskedPoll(asked),
+          ),
+        ],
       ],
     );
   }
@@ -226,6 +280,50 @@ class _CityCard extends StatelessWidget {
 }
 
 const _heart = Color(0xFFE0569B);
+
+/// 지난번 친구한테 물어본 투표(후보를 비워도 남는다). 없어진 투표면 보이지 않는다.
+class _RecentPoll extends StatelessWidget {
+  const _RecentPoll({required this.poll, required this.onOpen});
+
+  final Future<Poll?> poll;
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context) => FutureBuilder<Poll?>(
+        future: poll,
+        builder: (context, snap) {
+          final p = snap.data;
+          if (p == null) return const SizedBox.shrink();
+          final lead = p.leader.label;
+          return Material(
+            color: Colors.white.withValues(alpha: 0.75),
+            borderRadius: BorderRadius.circular(99),
+            child: InkWell(
+              onTap: onOpen,
+              borderRadius: BorderRadius.circular(99),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(14, 8, 10, 8),
+                child: Row(
+                  children: [
+                    const Icon(Icons.how_to_vote_outlined, size: 20, color: AppColors.primary),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        p.closed ? '지난번 투표 · $lead로 정해졌어요' : '친구들 답 기다리는 중 · 지금은 $lead 1위 · ${p.total}명',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                    const Icon(Icons.chevron_right, color: AppColors.muted),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      );
+}
 
 /// 담은 후보 줄. 2곳부터 "친구한테 물어보기"(픽클 투표로 공유).
 class _CandidateBar extends StatelessWidget {

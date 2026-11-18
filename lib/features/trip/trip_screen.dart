@@ -269,16 +269,19 @@ class _PlaceTile extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(place.name, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
-                Text(place.meta, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                Text(place.name,
+                    maxLines: 1, overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
+                Text(place.meta,
+                    maxLines: 1, overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                // 순위와 "나도 한 표"는 늘 한 줄. 좁으면 순위 글자 끝이 말줄임으로 줄어든다.
                 if (rank != null || done) ...[
                   const SizedBox(height: 3),
-                  Wrap(
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    spacing: 6,
-                    runSpacing: 2,
+                  Row(
                     children: [
-                      if (rank != null) _RankLine(rank: rank),
+                      if (rank != null) Flexible(child: _RankLine(rank: rank)),
+                      if (rank != null && done) const SizedBox(width: 4),
                       if (done) _VoteChip(voted: voted, onTap: onVote),
                     ],
                   ),
@@ -288,11 +291,15 @@ class _PlaceTile extends StatelessWidget {
           ),
           const SizedBox(width: 8),
           done
-              ? Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                  decoration: BoxDecoration(color: const Color(0xFFF0EDFF), borderRadius: BorderRadius.circular(12)),
-                  child: const Text('체크인 완료',
-                      style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: AppColors.primaryDeep)),
+              ? Semantics(
+                  label: '체크인 완료',
+                  excludeSemantics: true,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
+                    decoration: BoxDecoration(color: const Color(0xFFF0EDFF), borderRadius: BorderRadius.circular(12)),
+                    child: const Text('✓ 다녀옴',
+                        style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: AppColors.primaryDeep)),
+                  ),
                 )
               : FilledButton(onPressed: onCheckIn, child: const Text('체크인')),
         ],
@@ -310,15 +317,12 @@ class _RankLine extends StatelessWidget {
   static const _color = Color(0xFFA3245F);
 
   @override
-  Widget build(BuildContext context) => Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(Icons.emoji_events_rounded, size: 14, color: Color(0xFFFFB300)),
-          const SizedBox(width: 3),
-          Flexible(
-            child: Text(rank.label, style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: _color)),
-          ),
-        ],
+  Widget build(BuildContext context) => Text(
+        rank.label,
+        maxLines: 1,
+        softWrap: false,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: _color),
       );
 }
 
@@ -340,10 +344,12 @@ class _VoteChip extends StatelessWidget {
             onTap: onTap,
             borderRadius: BorderRadius.circular(99),
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
               child: Text(
                 voted ? '내 표 ✓' : '나도 한 표',
-                style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: voted ? Colors.white : _RankLine._color),
+                maxLines: 1,
+                softWrap: false,
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: voted ? Colors.white : _RankLine._color),
               ),
             ),
           ),

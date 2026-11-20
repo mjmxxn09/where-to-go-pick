@@ -84,12 +84,28 @@ class _KoreaMapViewState extends State<KoreaMapView> {
     widget.onCityChanged?.call(null);
   }
 
+  /// 울릉도·독도 상자 = 울릉군. 전국 지도에서 눌러도 경상북도 지도로 들어가며 바로 울릉군을 고른다.
+  void _selectUlleung() {
+    final detail = widget.data.details['37'];
+    if (detail == null) return;
+    setState(() {
+      _province = '37';
+      _city = ProvinceDetail.ulleungId;
+    });
+    widget.onCityChanged?.call(SelectedCity(
+      id: ProvinceDetail.ulleungId,
+      name: ProvinceDetail.ulleungName,
+      provinceCode: detail.code,
+      provinceName: detail.name,
+    ));
+  }
+
   void _handleTap(Offset p) {
     final detail = _province == null ? null : widget.data.details[_province];
     if (detail == null) {
       final inset = widget.data.overviewInset;
       if (inset != null && inset.bounds.inflate(6).contains(p)) {
-        _openProvince('37');
+        _selectUlleung();
         return;
       }
       for (final r in widget.data.provinces.reversed) {
@@ -98,6 +114,11 @@ class _KoreaMapViewState extends State<KoreaMapView> {
           return;
         }
       }
+      return;
+    }
+    final inset = detail.inset;
+    if (inset != null && inset.bounds.inflate(6).contains(p)) {
+      _selectUlleung();
       return;
     }
     for (final c in detail.cities.reversed) {
@@ -118,7 +139,7 @@ class _KoreaMapViewState extends State<KoreaMapView> {
   Widget build(BuildContext context) {
     final data = widget.data;
     final detail = _province == null ? null : data.details[_province];
-    final logical = detail == null ? data.overviewSize : KoreaMapData.detailSize;
+    final logical = detail?.size ?? data.overviewSize;
     final visitedMode = widget.mode == KoreaMapMode.visited;
 
     final regions = <_PaintRegion>[];
@@ -204,7 +225,11 @@ class _KoreaMapViewState extends State<KoreaMapView> {
                         regions: regions,
                         context: detail?.context,
                         inset: detail == null ? data.overviewInset : detail.inset,
-                        insetFill: detail == null && visitedMode && !_provinceVisited('37')
+                        insetSelected: detail != null && _city == ProvinceDetail.ulleungId,
+                        insetFill: visitedMode &&
+                                (detail == null
+                                    ? !_provinceVisited('37')
+                                    : !widget.visitedCityIds.contains(ProvinceDetail.ulleungId))
                             ? AppColors.mapUnvisited
                             : const Color(0xFFFFE7A8),
                         scale: scale,
@@ -281,6 +306,7 @@ class _KoreaMapPainter extends CustomPainter {
     required this.context,
     required this.inset,
     required this.insetFill,
+    required this.insetSelected,
     required this.scale,
     required this.offset,
   });
@@ -289,6 +315,9 @@ class _KoreaMapPainter extends CustomPainter {
   final Path? context;
   final MapInset? inset;
   final Color insetFill;
+
+  /// 울릉군을 골랐으면 상자 안 섬을 보라로 칠하고 핀을 꽂는다.
+  final bool insetSelected;
   final double scale;
   final Offset offset;
 
@@ -352,9 +381,10 @@ class _KoreaMapPainter extends CustomPainter {
           ..style = PaintingStyle.stroke
           ..strokeWidth = 1.5,
       );
-      canvas.drawPath(ins.path, Paint()..color = insetFill);
+      canvas.drawPath(ins.path, Paint()..color = insetSelected ? AppColors.primary : insetFill);
       canvas.drawPath(ins.path, white..strokeWidth = 1);
       _drawText(canvas, ins.label, Offset(ins.bounds.center.dx, ins.bounds.bottom + 12), 9, AppColors.ink);
+      if (insetSelected) _drawPin(canvas, ins.bounds.topCenter + const Offset(0, -2));
     }
 
     for (final r in regions) {

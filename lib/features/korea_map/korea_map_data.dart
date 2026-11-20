@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flutter/services.dart';
@@ -117,8 +118,23 @@ class ProvinceDetail {
           .map((e) => MapRegion.fromJson(e as Map<String, dynamic>, isProvince: false))
           .toList(),
       context: ctx == null || ctx.isEmpty ? null : pathFromSvg(ctx),
-      inset: MapInset.maybeFromJson(json['inset'] as Map<String, dynamic>?),
+      inset: MapInset.maybeFromJson(json['inset'] as Map<String, dynamic>?)?.movedTo(seaInsetTopLeft),
     );
+  }
+
+  /// 도 지도에서 울릉도·독도 상자를 놓는 자리: 울진 앞바다(오른쪽 위). 데이터에는 왼쪽 위(강원도 위)에 있어
+  /// 경상북도와 떨어진 것처럼 보였다. 상자가 들어갈 만큼 지도 칸을 오른쪽으로 넓힌다([size]).
+  static const seaInsetTopLeft = Offset(312, 28);
+
+  /// 울릉도·독도 상자를 누르면 고르는 시·군·구(통계청 코드).
+  static const ulleungId = '37430';
+  static const ulleungName = '울릉군';
+
+  /// 이 도 지도의 좌표 크기. 바다 쪽 섬 상자가 있으면 그만큼 넓다.
+  Size get size {
+    final box = inset?.bounds;
+    if (box == null) return KoreaMapData.detailSize;
+    return Size(math.max(KoreaMapData.detailSize.width, box.right + 12), KoreaMapData.detailSize.height);
   }
 
   final String code;
@@ -149,6 +165,12 @@ class MapInset {
   final Path path;
   final Rect bounds;
   final String label;
+
+  /// 상자 왼쪽 위를 [topLeft]로 옮긴 사본.
+  MapInset movedTo(Offset topLeft) {
+    final d = topLeft - bounds.topLeft;
+    return MapInset(path: path.shift(d), bounds: bounds.shift(d), label: label);
+  }
 }
 
 Color _hex(String hex) => Color(int.parse('FF${hex.replaceFirst('#', '')}', radix: 16));

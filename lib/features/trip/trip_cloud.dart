@@ -17,7 +17,7 @@ class SupabaseTripCloud implements TripCloud {
   final SupabaseRest _rest;
 
   static const _select =
-      'id,city_id,city_name,province_name,start_date,planned,check_ins(id,place_name,place_type,checked_in_at)';
+      'id,city_id,city_name,province_name,start_date,planned,ended_at,check_ins(id,place_name,place_type,checked_in_at)';
 
   @override
   Future<List<Trip>> pull() async {
@@ -51,6 +51,7 @@ Map<String, Object?> tripToRow(Trip t, String userId) => {
       'province_name': t.provinceName,
       'start_date': formatDateOnly(t.startDate),
       'planned': [for (final p in t.planned) plannedToJson(p)],
+      'ended_at': t.endedAt?.toUtc().toIso8601String(),
     };
 
 Map<String, Object?> checkInToRow(String tripId, CheckIn c, String userId) => {
@@ -84,6 +85,7 @@ Trip? tripFromRow(Map<String, dynamic> row) {
           if (_checkInFromRow(c) case final checkIn?) checkIn,
     ],
     planned: plannedListFromJson(row['planned']),
+    endedAt: row['ended_at'] is String ? DateTime.tryParse(row['ended_at'] as String)?.toLocal() : null,
   );
 }
 

@@ -48,7 +48,7 @@
 
 | 테이블 | 기본 키 | 내용 |
 |---|---|---|
-| `trips` | user_id, id | 도시 코드·이름, 시작일, 가볼 곳(`planned` JSON, 담은 순서) |
+| `trips` | user_id, id | 도시 코드·이름, 시작일, 가볼 곳(`planned` JSON, 담은 순서), 마친 시각(`ended_at`, 진행 중이면 null) |
 | `check_ins` | user_id, trip_id, id(장소) | 장소 이름·종류, 체크인 시각 (여행 삭제 시 같이 삭제) |
 | `card_decorations` | user_id, page_key | 스티커 JSON, 옮긴 장소 막대 JSON |
 

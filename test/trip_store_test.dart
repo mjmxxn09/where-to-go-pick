@@ -166,4 +166,52 @@ void main() {
     final remote = _trip('t1').copyWith(planned: const [PlannedPlace(id: 'x', name: 'X', type: PlaceType.other)]);
     expect(mergeTrips([local], [remote]).single.planned, isEmpty);
   });
+
+  test('여행 마치기 → 지난 여행, 되돌리기·다시 이어가기, 새 여행은 이전 여행을 마친다', () async {
+    final store = MemoryTripStore();
+    var now = DateTime(2026, 11, 20, 18);
+    final controller = TripController(clock: () => now, store: store)
+      ..startTrip(cityId: '32030', cityName: '강릉시', provinceName: '강원특별자치도');
+    final first = controller.trip!;
+    controller.checkIn(_place);
+
+    final ended = controller.endTrip()!;
+    expect(controller.trip, isNull);
+    expect(ended.endedAt, now);
+    expect(controller.pastTrips.single.isEnded, isTrue);
+    await Future<void>.delayed(Duration.zero);
+    expect(store.log.currentId, isNull);
+    expect(store.log.trips.single.endedAt, now);
+
+    controller.resumeTrip(first.id);
+    expect(controller.trip!.id, first.id);
+    expect(controller.trip!.isEnded, isFalse);
+    expect(controller.pastTrips, isEmpty);
+
+    now = DateTime(2026, 11, 21, 9);
+    controller.startTrip(cityId: '39010', cityName: '제주시', provinceName: '제주특별자치도');
+    expect(controller.trip!.cityId, '39010');
+    expect(controller.pastTrips.single.id, first.id);
+    expect(controller.pastTrips.single.endedAt, now, reason: '진행 중이던 여행은 새 여행 시작 때 마친다');
+
+    controller.resumeTrip(first.id);
+    expect(controller.trip!.id, first.id);
+    expect(controller.pastTrips.single.cityId, '39010');
+    expect(controller.pastTrips.single.isEnded, isTrue);
+  });
+
+  test('마친 시각은 저장·서버 행에 남고, 마친 여행은 다시 열 때 지금 여행이 되지 않는다', () async {
+    final endedAt = DateTime(2026, 11, 20, 18, 30);
+    final trip = _trip('t1', checkIns: [_c('a', 9)]).copyWith(ended: true, endedAt: endedAt);
+    expect(decodeTripLog(encodeTripLog(TripLog(trips: [trip]))).trips.single.endedAt, endedAt);
+    final row = tripToRow(trip, 'g');
+    expect(tripFromRow({...row, 'check_ins': <Object>[]})!.endedAt, endedAt);
+    expect(tripToRow(_trip('t2'), 'g')['ended_at'], isNull);
+
+    final store = MemoryTripStore(TripLog(trips: [trip], currentId: 't1'));
+    final controller = TripController(store: store);
+    await controller.restore();
+    expect(controller.trip, isNull);
+    expect(controller.pastTrips.single.id, 't1');
+  });
 }

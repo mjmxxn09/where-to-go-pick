@@ -7,6 +7,8 @@ import '../../core/theme/app_theme.dart';
 import '../korea_map/korea_map_data.dart';
 import '../korea_map/korea_map_view.dart';
 import '../trip/trip_controller.dart';
+import '../trip/trip_models.dart';
+import '../trip_card/trip_card_screen.dart';
 
 /// 1 · 내 여행 지도: 다녀온 시·군·구가 색칠된 지도와 지금 여행 바로가기.
 class MyMapScreen extends StatefulWidget {
@@ -43,6 +45,23 @@ class _MyMapScreenState extends State<MyMapScreen> {
   void dispose() {
     _listening?.removeListener(_onTripChanged);
     super.dispose();
+  }
+
+  void _openCard(Trip trip) {
+    if (trip.checkIns.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('체크인한 곳이 없어서 카드가 비어 있어요.')));
+      return;
+    }
+    Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => TripCardScreen(trip: trip)));
+  }
+
+  void _resume(TripController controller, Trip trip) {
+    final current = controller.trip;
+    controller.resumeTrip(trip.id);
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(current == null ? '${trip.title}을 다시 이어가요.' : '${current.title}을 마치고 ${trip.title}을 이어가요.'),
+    ));
+    widget.onOpenTrip();
   }
 
   @override
@@ -147,6 +166,20 @@ class _MyMapScreenState extends State<MyMapScreen> {
             );
           },
         ),
+        if (scope.trip.pastTrips.isNotEmpty) ...[
+          const SizedBox(height: Gap.m),
+          Text('지난 여행', style: titleStyle(18)),
+          const SizedBox(height: Gap.s),
+          for (final t in scope.trip.pastTrips)
+            Padding(
+              padding: const EdgeInsets.only(bottom: Gap.s),
+              child: _PastTripTile(
+                trip: t,
+                onOpen: () => _openCard(t),
+                onResume: () => _resume(scope.trip, t),
+              ),
+            ),
+        ],
         const SizedBox(height: Gap.m),
         const Text(
           '지도: 통계청 SGIS 행정구역 경계(2018) · 공공누리 제1유형',
@@ -238,4 +271,50 @@ class _MapError extends StatelessWidget {
         height: 120,
         child: Center(child: Text('지도를 불러오지 못했어요.')),
       );
+}
+
+/// 지난 여행 한 줄: 누르면 카드, 오른쪽 메뉴에서 다시 이어가기.
+class _PastTripTile extends StatelessWidget {
+  const _PastTripTile({required this.trip, required this.onOpen, required this.onResume});
+
+  final Trip trip;
+  final VoidCallback onOpen;
+  final VoidCallback onResume;
+
+  @override
+  Widget build(BuildContext context) {
+    final d = trip.startDate;
+    return AppCard(
+      onTap: onOpen,
+      padding: const EdgeInsets.fromLTRB(10, 8, 4, 8),
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(color: AppColors.primaryContainer, borderRadius: BorderRadius.circular(14)),
+            child: const Icon(Icons.auto_stories_outlined, color: AppColors.primaryDeep),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(trip.title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
+                Text(
+                  '${d.year}.${d.month}.${d.day} · ${trip.lengthLabel} · 체크인 ${trip.checkIns.length}곳',
+                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                ),
+              ],
+            ),
+          ),
+          PopupMenuButton<String>(
+            tooltip: '더 보기',
+            onSelected: (_) => onResume(),
+            itemBuilder: (context) => const [PopupMenuItem(value: 'resume', child: Text('다시 이어가기'))],
+          ),
+        ],
+      ),
+    );
+  }
 }

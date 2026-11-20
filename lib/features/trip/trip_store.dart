@@ -71,6 +71,7 @@ Map<String, Object?> tripToJson(Trip t) => {
       'startDate': _date(t.startDate),
       'checkIns': [for (final c in t.checkIns) checkInToJson(c)],
       'planned': [for (final p in t.planned) plannedToJson(p)],
+      if (t.endedAt != null) 'endedAt': t.endedAt!.toUtc().toIso8601String(),
     };
 
 Trip? tripFromJson(Object? json) {
@@ -92,6 +93,7 @@ Trip? tripFromJson(Object? json) {
     startDate: start,
     checkIns: [if (list is List<dynamic>) ...list.map(checkInFromJson).whereType<CheckIn>()],
     planned: plannedListFromJson(json['planned']),
+    endedAt: json['endedAt'] is String ? DateTime.tryParse(json['endedAt'] as String)?.toLocal() : null,
   );
 }
 

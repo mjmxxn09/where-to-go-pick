@@ -35,6 +35,12 @@ class TripController extends ChangeNotifier {
   /// 저장된 모든 여행(진행 중 포함, 예시 여행 제외), 시작일 최신순.
   List<Trip> get trips => _trips;
 
+  /// 지금 여행을 뺀 지난 여행들, 시작일 최신순.
+  List<Trip> get pastTrips => [
+        for (final t in _trips)
+          if (t.id != _trip?.id) t,
+      ];
+
   /// 체크인이 하나라도 있는 여행의 시·군·구 코드. 내 지도에 칠한다.
   Set<String> get visitedCityIds => {
         for (final t in _trips)
@@ -53,7 +59,8 @@ class TripController extends ChangeNotifier {
           _trips = mergeTrips(_trips, log.trips);
           final current = _trip;
           if (current == null || isSampleTrip(current)) {
-            _trip = _find(log.currentId);
+            final saved = _find(log.currentId);
+            _trip = saved == null || saved.isEnded ? null : saved;
           }
           _needsPush = true; // 지난번에 못 올린 것이 있을 수 있다
           notifyListeners();
@@ -96,8 +103,15 @@ class TripController extends ChangeNotifier {
     }
   }
 
+  /// 새 여행을 시작한다. 진행 중이던 여행이 있으면 지금 시각으로 마친다.
   void startTrip({required String cityId, required String cityName, required String provinceName}) {
     final now = _clock();
+    final previous = _trip;
+    if (previous != null && !isSampleTrip(previous) && !previous.isEnded) {
+      final ended = previous.copyWith(ended: true, endedAt: now);
+      _trips = [for (final t in _trips) t.id == ended.id ? ended : t];
+      _changed(ended);
+    }
     final trip = Trip(
       id: 'trip-${now.millisecondsSinceEpoch}',
       cityId: cityId,
@@ -121,6 +135,32 @@ class TripController extends ChangeNotifier {
       ...current.checkIns,
       CheckIn(id: place.id, placeName: place.name, type: place.type, at: _clock()),
     ]));
+  }
+
+  /// 지금 여행을 마친다. 기록은 지난 여행으로 남고, 여행 중 화면은 비워진다. 마친 여행을 돌려준다.
+  Trip? endTrip() {
+    final current = _trip;
+    if (current == null) return null;
+    final ended = current.copyWith(ended: true, endedAt: _clock());
+    if (!isSampleTrip(ended)) _trips = [for (final t in _trips) t.id == ended.id ? ended : t];
+    _trip = null;
+    notifyListeners();
+    _changed(ended);
+    return ended;
+  }
+
+  /// 마친 여행을 다시 지금 여행으로. 진행 중이던 다른 여행은 마친다.
+  void resumeTrip(String tripId) {
+    final target = _find(tripId);
+    if (target == null) return;
+    final now = _clock();
+    final previous = _trip;
+    if (previous != null && previous.id != tripId && !isSampleTrip(previous) && !previous.isEnded) {
+      final ended = previous.copyWith(ended: true, endedAt: now);
+      _trips = [for (final t in _trips) t.id == ended.id ? ended : t];
+      _changed(ended);
+    }
+    _replaceCurrent(target.copyWith(ended: false));
   }
 
   bool isPlanned(String placeId) => _trip?.planned.any((p) => p.id == placeId) ?? false;
@@ -194,7 +234,8 @@ bool _sameTrips(List<Trip> a, List<Trip> b) {
   for (var i = 0; i < a.length; i++) {
     if (a[i].id != b[i].id ||
         a[i].checkIns.length != b[i].checkIns.length ||
-        a[i].planned.length != b[i].planned.length) {
+        a[i].planned.length != b[i].planned.length ||
+        a[i].endedAt != b[i].endedAt) {
       return false;
     }
   }

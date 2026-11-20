@@ -59,6 +59,7 @@ class Trip {
     required this.startDate,
     List<CheckIn> checkIns = const [],
     List<PlannedPlace> planned = const [],
+    this.endedAt,
   })  : checkIns = List.unmodifiable([...checkIns]..sort((a, b) => a.at.compareTo(b.at))),
         planned = List.unmodifiable(planned);
 
@@ -76,9 +77,15 @@ class Trip {
   /// 가볼 곳(담은 순서).
   final List<PlannedPlace> planned;
 
+  /// "여행 마치기"를 누른 때. null이면 아직 진행 중.
+  final DateTime? endedAt;
+
+  bool get isEnded => endedAt != null;
+
   String get title => '${cityName.replaceAll(RegExp(r'(시|군|구)$'), '')} 여행';
 
-  Trip copyWith({List<CheckIn>? checkIns, List<PlannedPlace>? planned}) => Trip(
+  /// [ended]: null이면 그대로, false면 다시 진행 중으로, true면 [endedAt]으로 마침.
+  Trip copyWith({List<CheckIn>? checkIns, List<PlannedPlace>? planned, bool? ended, DateTime? endedAt}) => Trip(
         id: id,
         cityId: cityId,
         cityName: cityName,
@@ -86,6 +93,11 @@ class Trip {
         startDate: startDate,
         checkIns: checkIns ?? this.checkIns,
         planned: planned ?? this.planned,
+        endedAt: switch (ended) {
+          null => this.endedAt,
+          false => null,
+          true => endedAt ?? this.endedAt ?? DateTime.now(),
+        },
       );
 
   /// 체크인을 날짜별로 묶는다. 체크인이 없는 날은 만들지 않는다.

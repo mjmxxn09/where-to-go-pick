@@ -146,6 +146,30 @@ class _TripScreenState extends State<TripScreen> {
     );
   }
 
+  Future<void> _endTrip(TripController controller, Trip trip) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('${trip.title}을 마칠까요?'),
+        content: Text(trip.checkIns.isEmpty
+            ? '체크인한 곳 없이 마쳐요. 지난 여행에서 다시 이어갈 수 있어요.'
+            : '체크인 ${trip.checkIns.length}곳이 지난 여행에 남아요. 카드는 내 지도의 지난 여행에서 다시 볼 수 있어요.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('계속 여행하기')),
+          FilledButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('여행 마치기')),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    final ended = controller.endTrip();
+    if (ended == null) return;
+    setState(() => _ask = null);
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text('${ended.title}을 마쳤어요.'),
+      action: SnackBarAction(label: '되돌리기', onPressed: () => controller.resumeTrip(ended.id)),
+    ));
+  }
+
   Widget _tile(TripController controller, Trip trip, PlaceSuggestion p) => _PlaceTile(
         place: p,
         done: controller.isCheckedIn(p.id),
@@ -263,12 +287,19 @@ class _TripScreenState extends State<TripScreen> {
         const SizedBox(height: Gap.m),
         _Timeline(trip: trip),
         const SizedBox(height: Gap.m),
+        // 여행 중에도 카드를 미리 볼 수 있다. 여행을 끝내는 건 아래 "여행 마치기"뿐.
         OutlinedButton.icon(
           onPressed: trip.checkIns.isEmpty
               ? null
               : () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => TripCardScreen(trip: trip))),
           icon: const Icon(Icons.auto_stories_outlined),
-          label: const Text('여행 마치고 카드 만들기'),
+          label: const Text('여행 카드 보기'),
+        ),
+        const SizedBox(height: Gap.xs),
+        TextButton.icon(
+          onPressed: () => _endTrip(controller, trip),
+          icon: const Icon(Icons.flag_outlined),
+          label: const Text('여행 마치기'),
         ),
         // 픽클이 말풍선이 마지막 항목을 가리지 않게
         if (_ask != null) const SizedBox(height: 170),

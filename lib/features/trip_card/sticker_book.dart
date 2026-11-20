@@ -19,9 +19,9 @@ class StickerBook {
   static const folder = 'assets/stickers';
 
   static const placeStickers = <PlaceType, List<String>>{
-    PlaceType.beach: ['place_beach_parasol', 'place_beach_island', 'place_beach_tube'],
+    PlaceType.beach: ['place_beach_parasol', 'place_beach_island', 'place_beach_tube', 'place_beach_lighthouse'],
     PlaceType.cafe: ['place_cafe_coffee', 'place_cafe_terrace', 'place_cafe_store'],
-    PlaceType.heritage: ['place_heritage_hanok', 'place_heritage_pagoda', 'place_heritage_fortress'],
+    PlaceType.heritage: ['place_heritage_hanok', 'place_heritage_pagoda', 'place_heritage_fortress', 'place_heritage_tomb'],
     PlaceType.market: ['place_market_gate', 'place_market_produce', 'place_market_foodcart'],
     PlaceType.food: [
       'place_food_stew', 'place_food_noodle', 'place_food_bbq',
@@ -30,11 +30,14 @@ class StickerBook {
     PlaceType.seafood: ['place_seafood_sashimi', 'place_seafood_grilled'],
     PlaceType.nature: [
       'place_nature_forest', 'place_nature_waterfall', 'place_nature_meadow',
-      'place_nature_bamboo',
+      'place_nature_bamboo', 'place_nature_mountain', 'place_nature_lake', 'place_nature_bridge',
     ],
     PlaceType.lodging: [
       'place_lodging_hanok', 'place_lodging_hotel', 'place_lodging_resort', 'place_lodging_camping',
     ],
+    // 2026-11-20 한국관광 100선 분류로 모자란 그림을 직접 그려 더함(docs/stickers.md)
+    PlaceType.leisure: ['place_leisure_themepark', 'place_leisure_cablecar', 'place_leisure_tower'],
+    PlaceType.culture: ['place_culture_museum', 'place_culture_street'],
     PlaceType.other: [],
   };
 

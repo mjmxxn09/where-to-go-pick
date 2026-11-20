@@ -27,6 +27,10 @@ void drawDoodle(Canvas canvas, PlaceType type, Offset topLeft, {double scale = 1
       _nature(canvas);
     case PlaceType.lodging:
       _heritage(canvas);
+    case PlaceType.leisure:
+      _star(canvas);
+    case PlaceType.culture:
+      _heritage(canvas);
     case PlaceType.other:
       _star(canvas);
   }

@@ -20,6 +20,25 @@ void main() {
     expect(pick('불국사', PlaceType.heritage), 'place_heritage_pagoda');
   });
 
+  test('한국관광 100선으로 더한 스티커', () {
+    expect(pick('남산서울타워', PlaceType.leisure), 'place_leisure_tower');
+    expect(pick('롯데월드타워 서울스카이', PlaceType.leisure), 'place_leisure_tower');
+    expect(pick('에버랜드', PlaceType.leisure), 'place_leisure_themepark');
+    expect(pick('목포 해상케이블카', PlaceType.leisure), 'place_leisure_cablecar');
+    expect(pick('제천 청풍호반케이블카', PlaceType.nature), 'place_leisure_cablecar');
+    expect(pick('국립중앙박물관', PlaceType.culture), 'place_culture_museum');
+    expect(pick('부산 감천문화마을', PlaceType.culture), 'place_culture_street');
+    expect(pick('속초 설악산 국립공원', PlaceType.nature), 'place_nature_mountain');
+    expect(pick('무등산', PlaceType.nature), 'place_nature_mountain');
+    expect(pick('부산 돼지국밥', PlaceType.food), 'place_food_stew');
+    expect(pick('창녕 우포늪', PlaceType.nature), 'place_nature_lake');
+    expect(pick('예산 예당호 출렁다리', PlaceType.nature), 'place_nature_bridge');
+    expect(pick('울산 대왕암공원', PlaceType.nature), 'place_beach_lighthouse');
+    expect(pick('경주 첨성대', PlaceType.heritage), 'place_heritage_tomb');
+    expect(pick('정동진', PlaceType.beach, used: {'place_beach_parasol', 'place_beach_island', 'place_beach_tube'}),
+        'place_beach_lighthouse');
+  });
+
   test('종류가 달라도 이름이 더 정확하면 이름을 따른다', () {
     expect(pick('사천 바다 횟집', PlaceType.food), 'place_seafood_sashimi');
     expect(pick('바닷가 생선구이', PlaceType.food), 'place_seafood_grilled');

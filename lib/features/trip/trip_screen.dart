@@ -7,6 +7,7 @@ import '../../core/votes/vote_repository.dart';
 import '../votes/pickle_ask_bubble.dart';
 import '../shared/weather_icon.dart';
 import '../trip_card/trip_card_screen.dart';
+import 'place_filter.dart';
 import 'trip_controller.dart';
 import 'trip_models.dart';
 
@@ -19,7 +20,7 @@ class TripScreen extends StatefulWidget {
 }
 
 class _TripScreenState extends State<TripScreen> {
-  bool _food = false;
+  PlaceFilter _filter = PlaceFilter.all;
   String? _loadedCity;
   Future<List<PlaceSuggestion>>? _places;
   Future<DayWeather>? _weather;
@@ -213,19 +214,13 @@ class _TripScreenState extends State<TripScreen> {
             },
           )
         else ...[
-          SegmentedButton<bool>(
-            segments: const [
-              ButtonSegment(value: false, label: Text('명소')),
-              ButtonSegment(value: true, label: Text('맛집')),
-            ],
-            selected: {_food},
-            onSelectionChanged: (s) => setState(() => _food = s.first),
-          ),
-          const SizedBox(height: Gap.s),
           FutureBuilder<List<PlaceSuggestion>>(
             future: _places,
             builder: (context, snap) {
-              final places = (snap.data ?? const <PlaceSuggestion>[]).where((p) => p.isFood == _food).toList();
+              final all = snap.data ?? const <PlaceSuggestion>[];
+              final filters = PlaceFilter.available(all.map((p) => p.type));
+              final filter = filters.contains(_filter) ? _filter : PlaceFilter.all;
+              final places = all.where((p) => filter.matches(p.type)).toList();
               if (snap.connectionState != ConnectionState.done) {
                 return const Padding(padding: EdgeInsets.all(Gap.m), child: LinearProgressIndicator());
               }
@@ -235,10 +230,33 @@ class _TripScreenState extends State<TripScreen> {
                   onRetry: () => setState(() => _loadedCity = null),
                 );
               }
-              if (places.isEmpty) {
-                return _LoadProblem(message: _food ? '이 지역 맛집을 아직 못 찾았어요.' : '이 지역 명소를 아직 못 찾았어요.');
-              }
-              return Column(children: [for (final p in places) _tile(controller, trip, p)]);
+              if (all.isEmpty) return const _LoadProblem(message: '이 지역 추천 장소를 아직 못 찾았어요.');
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        for (final f in filters)
+                          Padding(
+                            padding: const EdgeInsets.only(right: 6),
+                            child: ChoiceChip(
+                              label: Text(f == PlaceFilter.all
+                                  ? '${f.label} ${all.length}'
+                                  : '${f.label} ${all.where((p) => f.matches(p.type)).length}'),
+                              selected: f == filter,
+                              showCheckmark: false,
+                              onSelected: (_) => setState(() => _filter = f),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: Gap.s),
+                  for (final p in places) _tile(controller, trip, p),
+                ],
+              );
             },
           ),
         ],

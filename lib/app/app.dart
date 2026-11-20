@@ -55,9 +55,11 @@ class _WhereToGoPickAppState extends State<WhereToGoPickApp> {
   late final LifeRepository _life = widget.life ?? const FixtureLifeRepository();
   // 픽클 투표는 서버 쪽 정책(채널·지역 연결·다녀온 사람 표)이 정해질 때까지 예시 구현만 쓴다.
   late final VoteRepository _votes = widget.votes ?? FixtureVoteRepository();
-  // 서버가 없을 때는 예시 여행(강릉 2박 3일)으로 화면을 채운다. 저장된 여행이 있으면 그쪽이 먼저다.
+  // 서버가 하나도 없을 때(화면 확인용)만 예시 여행(강릉 2박 3일)과 예시 방문 지역을 보여 준다.
+  // 여행 기록 서버(Supabase)가 연결되면 빈 지도에서 시작하고, 직접 시작한 여행만 보인다.
+  late final bool _showSamples = widget.config.useLifeFixtures && !widget.config.useCloud;
   late final TripController _trip = TripController(
-    initial: widget.config.useLifeFixtures ? sampleGangneungTrip() : null,
+    initial: _showSamples ? sampleGangneungTrip() : null,
     store: PrefsTripStore(),
     cloud: _tripCloud(),
   )..restore();
@@ -102,7 +104,7 @@ class _WhereToGoPickAppState extends State<WhereToGoPickApp> {
       votes: _votes,
       trip: _trip,
       mapData: _mapData,
-      visitedCityIds: widget.config.useLifeFixtures ? sampleVisitedCityIds : const <String>{},
+      visitedCityIds: _showSamples ? sampleVisitedCityIds : const <String>{},
       cloud: _cloud,
       child: MaterialApp(
         title: '어디갈지 Pick!',

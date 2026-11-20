@@ -48,6 +48,22 @@ class StickerBook {
     'landmark_dabotap', 'landmark_seongsan', 'landmark_dokdo', 'landmark_gwangan_bridge',
     'landmark_haedong_yonggungsa', 'landmark_gamcheon', 'landmark_hahoe_mask', 'landmark_namiseom',
     'landmark_suncheonman', 'landmark_dodamsambong', 'landmark_daegwallyeong',
+    'landmark_jeonju_hanok',
+    'landmark_pohang_spacewalk',
+    'landmark_ulsanbawi',
+    'landmark_yeosu_night',
+    'landmark_chinatown',
+    'landmark_dolhareubang',
+    'landmark_hallasan',
+    'landmark_udo',
+    'landmark_cheomseongdae',
+    'landmark_mancheonha',
+    'landmark_lotte_tower',
+    'landmark_boseong_tea',
+    'landmark_jinhae_cherry',
+    'landmark_jeongdongjin',
+    'landmark_gyeongpodae',
+    'landmark_ojukheon',
   ];
 
   static const moveStickers = ['move_bus', 'move_car', 'move_bike', 'move_plane', 'move_ship', 'move_walk'];

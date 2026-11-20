@@ -77,7 +77,7 @@ void main() {
         expect((s.y - slot.y).abs(), 8 + 4 + autoStickerSize / 2);
       }
       expect(result.take(3).map((s) => s.name),
-          ['place_beach_parasol', 'place_cafe_coffee', 'place_heritage_hanok']); // 경포해변·안목 커피거리·오죽헌
+          ['place_beach_parasol', 'place_cafe_coffee', 'landmark_ojukheon']); // 경포해변·안목 커피거리·오죽헌(명소)
       expect(result.map((s) => s.name), isNot(contains('move_car')));
       expect(result.map((s) => s.id).toSet().length, result.length);
     });

@@ -79,6 +79,23 @@ const landmarkKeywords = <(List<String>, String)>[
   (['순천만'], 'landmark_suncheonman'),
   (['도담삼봉'], 'landmark_dodamsambong'),
   (['대관령', '양떼목장'], 'landmark_daegwallyeong'),
+  // 11-20 두 번째 묶음
+  (['전주한옥마을', '경기전', '오목대'], 'landmark_jeonju_hanok'),
+  (['스페이스워크'], 'landmark_pohang_spacewalk'),
+  (['울산바위', '설악산', '외설악'], 'landmark_ulsanbawi'),
+  (['여수밤바다', '돌산대교', '하멜등대', '여수엑스포'], 'landmark_yeosu_night'),
+  (['차이나타운'], 'landmark_chinatown'),
+  (['돌하르방', '올레길', '제주올레'], 'landmark_dolhareubang'),
+  (['한라산', '백록담', '영실', '성판악'], 'landmark_hallasan'),
+  (['우도'], 'landmark_udo'),
+  (['첨성대'], 'landmark_cheomseongdae'),
+  (['만천하'], 'landmark_mancheonha'),
+  (['롯데월드타워', '서울스카이'], 'landmark_lotte_tower'),
+  (['보성녹차', '녹차밭', '대한다원', '차밭'], 'landmark_boseong_tea'),
+  (['여좌천', '군항제', '경화역', '벚꽃'], 'landmark_jinhae_cherry'),
+  (['정동진'], 'landmark_jeongdongjin'),
+  (['경포대', '경포호'], 'landmark_gyeongpodae'),
+  (['오죽헌'], 'landmark_ojukheon'),
 ];
 
 /// 이름에 흔히 붙는 말. 다른 또렷한 말이 없을 때만 쓴다("○○공원", "○○거리", "○○숲").

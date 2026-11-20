@@ -127,4 +127,26 @@ SVG로 그리고(`tool`: rsvg) 색연필 결·흰 칼선을 입혀 512px PNG로 
 | landmark_daegwallyeong | 풍력발전기와 양떼, 울타리 | 대관령·양떼목장 |
 
 - '남산', '감천'처럼 짧은 말은 다른 곳(경주 남산 등)도 걸려서 넣지 않았다.
-- 더 그릴 후보: 전주 한옥마을(경기전), 경주 첨성대(유적 그림이 이미 첨성대), 포항 스페이스워크, 설악산 울산바위, 여수 밤바다, 인천 차이나타운 패루.
+
+두 번째 묶음 16종(같은 날): 순천만 데크길·감천 집 배치도 다시 그림.
+
+| 파일 | 그림 | 이름 키워드 |
+|---|---|---|
+| landmark_jeonju_hanok | 한옥 지붕 마을 + 오목대 정자 + 은행나무 | 전주한옥마을·경기전·오목대 (완주 오성한옥마을은 일반 한옥) |
+| landmark_pohang_spacewalk | 한 바퀴 도는 철제 산책로 | 스페이스워크 |
+| landmark_ulsanbawi | 둥근 화강암 봉우리 + 소나무 | 울산바위·설악산·외설악 |
+| landmark_yeosu_night | 밤바다 돌산대교 조명 + 빨간 등대 | 여수밤바다·돌산대교·하멜등대·여수엑스포 |
+| landmark_chinatown | 빨간 패루 + 홍등 | 차이나타운 |
+| landmark_dolhareubang | 돌하르방 + 귤 | 돌하르방·올레길·제주올레 |
+| landmark_hallasan | 눈 덮인 백록담 + 구상나무 | 한라산·백록담·영실·성판악 |
+| landmark_udo | 우도봉 등대 + 옥빛 바다 + 흰 모래 | 우도 |
+| landmark_cheomseongdae | 첨성대 + 핑크뮬리 + 달 | 첨성대 |
+| landmark_mancheonha | 세 갈래 전망대 | 만천하 |
+| landmark_lotte_tower | 롯데월드타워 + 강변 건물 | 롯데월드타워·서울스카이 |
+| landmark_boseong_tea | 굽이치는 녹차밭 고랑 + 삼나무 | 보성녹차·녹차밭·대한다원·차밭 |
+| landmark_jinhae_cherry | 벚꽃 터널 + 빨간 다리 | 여좌천·군항제·경화역·벚꽃 |
+| landmark_jeongdongjin | 해돋이 + 바닷가 기차 | 정동진 |
+| landmark_gyeongpodae | 밤 호수의 달들 + 경포대 정자 | 경포대·경포호 (경포해변은 해변 그대로) |
+| landmark_ojukheon | 한옥 대문 + 검은 대나무(오죽) | 오죽헌 |
+
+- 더 그릴 후보: 통영 동피랑, 경주 황리단길, 부산 해운대 해변열차, 태안 꽃지 할미할아비바위, 담양 메타프로방스, 서울 북촌한옥마을.

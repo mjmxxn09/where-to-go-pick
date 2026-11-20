@@ -149,4 +149,24 @@ SVG로 그리고(`tool`: rsvg) 색연필 결·흰 칼선을 입혀 512px PNG로 
 | landmark_gyeongpodae | 밤 호수의 달들 + 경포대 정자 | 경포대·경포호 (경포해변은 해변 그대로) |
 | landmark_ojukheon | 한옥 대문 + 검은 대나무(오죽) | 오죽헌 |
 
-- 더 그릴 후보: 통영 동피랑, 경주 황리단길, 부산 해운대 해변열차, 태안 꽃지 할미할아비바위, 담양 메타프로방스, 서울 북촌한옥마을.
+
+세 번째 묶음 14종(같은 날):
+
+| 파일 | 그림 | 이름 키워드 |
+|---|---|---|
+| landmark_dongpirang | 천사 날개 벽화 + 항구 배 | 동피랑 |
+| landmark_hwangnidan | 한옥 지붕 가게 거리 + 홍등 | 황리단길 |
+| landmark_haeundae_capsule | 바닷가 레일 위 알록달록 캡슐 | 스카이캡슐·해변열차·블루라인파크 |
+| landmark_kkotji | 노을 속 두 바위섬 | 꽃지·할미할아비 (꽃지해수욕장도 이 그림) |
+| landmark_bukchon | 비탈 한옥 골목 + 멀리 남산타워 | 북촌 |
+| landmark_daereungwon | 두 고분 사이 목련 한 그루 | 대릉원·천마총 |
+| landmark_woljeonggyo | 불 켜진 지붕 다리(밤) | 월정교 |
+| landmark_hyeopjae | 옥빛 바다·비양도·현무암 | 협재·금능 |
+| landmark_abai_gaetbae | 줄 당겨 건너는 갯배 | 아바이마을·갯배 |
+| landmark_banpo_rainbow | 다리에서 쏟아지는 무지개 분수(밤) | 반포대교·달빛무지개·반포한강공원·세빛섬 |
+| landmark_german_village | 주황 지붕 흰 집들 + 바다 | 독일마을 |
+| landmark_windy_hill | 언덕 위 풍차 | 바람의 언덕 |
+| landmark_gwangmyeong_cave | 불빛 걸린 동굴 입구 | 광명동굴·동굴(모든 동굴) |
+| landmark_imjingak | 바람개비 언덕 + 리본 울타리 | 임진각·평화누리·DMZ |
+
+- 명소 스티커는 모두 45종. 다음 후보: 서울 청계천, 수원 행궁동, 춘천 소양강 스카이워크, 제주 섭지코지, 부산 흰여울문화마을, 경주 불국사 단풍길.

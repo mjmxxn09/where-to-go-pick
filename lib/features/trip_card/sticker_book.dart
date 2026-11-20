@@ -64,6 +64,20 @@ class StickerBook {
     'landmark_jeongdongjin',
     'landmark_gyeongpodae',
     'landmark_ojukheon',
+    'landmark_dongpirang',
+    'landmark_hwangnidan',
+    'landmark_haeundae_capsule',
+    'landmark_kkotji',
+    'landmark_bukchon',
+    'landmark_daereungwon',
+    'landmark_woljeonggyo',
+    'landmark_hyeopjae',
+    'landmark_abai_gaetbae',
+    'landmark_banpo_rainbow',
+    'landmark_german_village',
+    'landmark_windy_hill',
+    'landmark_gwangmyeong_cave',
+    'landmark_imjingak',
   ];
 
   static const moveStickers = ['move_bus', 'move_car', 'move_bike', 'move_plane', 'move_ship', 'move_walk'];

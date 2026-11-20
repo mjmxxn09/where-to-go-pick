@@ -96,6 +96,21 @@ const landmarkKeywords = <(List<String>, String)>[
   (['정동진'], 'landmark_jeongdongjin'),
   (['경포대', '경포호'], 'landmark_gyeongpodae'),
   (['오죽헌'], 'landmark_ojukheon'),
+  // 세 번째 묶음
+  (['동피랑'], 'landmark_dongpirang'),
+  (['황리단길', '황리단'], 'landmark_hwangnidan'),
+  (['스카이캡슐', '해변열차', '블루라인파크'], 'landmark_haeundae_capsule'),
+  (['꽃지', '할미할아비'], 'landmark_kkotji'),
+  (['북촌'], 'landmark_bukchon'),
+  (['대릉원', '천마총'], 'landmark_daereungwon'),
+  (['월정교'], 'landmark_woljeonggyo'),
+  (['협재', '금능'], 'landmark_hyeopjae'),
+  (['아바이마을', '갯배'], 'landmark_abai_gaetbae'),
+  (['반포대교', '달빛무지개', '반포한강공원', '세빛섬'], 'landmark_banpo_rainbow'),
+  (['독일마을'], 'landmark_german_village'),
+  (['바람의언덕', '바람의 언덕'], 'landmark_windy_hill'),
+  (['광명동굴', '동굴'], 'landmark_gwangmyeong_cave'),
+  (['임진각', '평화누리', 'DMZ', '비무장지대'], 'landmark_imjingak'),
 ];
 
 /// 이름에 흔히 붙는 말. 다른 또렷한 말이 없을 때만 쓴다("○○공원", "○○거리", "○○숲").

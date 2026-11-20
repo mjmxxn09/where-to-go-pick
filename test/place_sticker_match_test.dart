@@ -78,6 +78,21 @@ void main() {
     expect(pick('경포대', PlaceType.heritage), 'landmark_gyeongpodae');
     expect(pick('경포해변', PlaceType.beach), 'place_beach_parasol');
     expect(pick('오죽헌', PlaceType.heritage), 'landmark_ojukheon');
+    expect(pick('통영 동피랑 벽화마을', PlaceType.culture), 'landmark_dongpirang');
+    expect(pick('경주 황리단길', PlaceType.culture), 'landmark_hwangnidan');
+    expect(pick('부산 해운대 블루라인파크 스카이캡슐', PlaceType.leisure), 'landmark_haeundae_capsule');
+    expect(pick('태안 꽃지해수욕장', PlaceType.beach), 'landmark_kkotji');
+    expect(pick('북촌한옥마을', PlaceType.heritage), 'landmark_bukchon');
+    expect(pick('경주 대릉원', PlaceType.heritage), 'landmark_daereungwon');
+    expect(pick('안동 월정교', PlaceType.heritage), 'landmark_woljeonggyo');
+    expect(pick('협재해수욕장', PlaceType.beach), 'landmark_hyeopjae');
+    expect(pick('속초 아바이마을', PlaceType.culture), 'landmark_abai_gaetbae');
+    expect(pick('반포한강공원', PlaceType.nature), 'landmark_banpo_rainbow');
+    expect(pick('남해 독일마을', PlaceType.culture), 'landmark_german_village');
+    expect(pick('거제 바람의 언덕', PlaceType.nature), 'landmark_windy_hill');
+    expect(pick('광명동굴', PlaceType.leisure), 'landmark_gwangmyeong_cave');
+    expect(pick('단양 고수동굴', PlaceType.nature), 'landmark_gwangmyeong_cave');
+    expect(pick('파주 임진각', PlaceType.heritage), 'landmark_imjingak');
     // 그림이 없으면 원래 규칙으로
     expect(pick('남산서울타워', PlaceType.leisure, has: (n) => !n.startsWith('landmark_')), 'place_leisure_tower');
   });

@@ -117,10 +117,26 @@ class TripController extends ChangeNotifier {
   void checkIn(PlaceSuggestion place) {
     final current = _trip;
     if (current == null || isCheckedIn(place.id)) return;
-    final next = current.copyWith(checkIns: [
+    _replaceCurrent(current.copyWith(checkIns: [
       ...current.checkIns,
       CheckIn(id: place.id, placeName: place.name, type: place.type, at: _clock()),
-    ]);
+    ]));
+  }
+
+  bool isPlanned(String placeId) => _trip?.planned.any((p) => p.id == placeId) ?? false;
+
+  /// 가볼 곳에 담거나 뺀다.
+  void togglePlanned(PlaceSuggestion place) {
+    final current = _trip;
+    if (current == null) return;
+    _replaceCurrent(current.copyWith(
+      planned: isPlanned(place.id)
+          ? [for (final p in current.planned) if (p.id != place.id) p]
+          : [...current.planned, PlannedPlace(id: place.id, name: place.name, type: place.type, meta: place.meta)],
+    ));
+  }
+
+  void _replaceCurrent(Trip next) {
     _trip = next;
     if (!isSampleTrip(next)) _trips = [for (final t in _trips) t.id == next.id ? next : t];
     notifyListeners();
@@ -176,7 +192,11 @@ class TripController extends ChangeNotifier {
 bool _sameTrips(List<Trip> a, List<Trip> b) {
   if (a.length != b.length) return false;
   for (var i = 0; i < a.length; i++) {
-    if (a[i].id != b[i].id || a[i].checkIns.length != b[i].checkIns.length) return false;
+    if (a[i].id != b[i].id ||
+        a[i].checkIns.length != b[i].checkIns.length ||
+        a[i].planned.length != b[i].planned.length) {
+      return false;
+    }
   }
   return true;
 }

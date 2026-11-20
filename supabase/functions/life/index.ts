@@ -1,6 +1,6 @@
 // 여행지 정보: 명소·맛집(한국관광공사 TourAPI)과 날씨(기상청 단기예보).
 //
-// POST { action: "places" | "weather", provinceCode: "32", cityName: "강릉시", date?: "2026-11-20" }
+// POST { action: "places" | "weather" | "search", provinceCode: "32", cityName: "강릉시", date?: "2026-11-20", query?: "커피" }
 //   provinceCode는 앱 지도(통계청)의 도 코드(시·군·구 id 앞 두 자리).
 // 응답: { places: [...] } 또는 { weather: {...} }
 //
@@ -9,7 +9,7 @@
 import { isAppUser } from "./auth.ts";
 import { UpstreamError } from "./datago.ts";
 import { kst, loadForecast, summarize, toGrid } from "./kma.ts";
-import { centerOf, loadLdongs, loadPlaces, matchCity } from "./tour.ts";
+import { centerOf, type Ldong, loadLdongs, loadPlaces, matchCity, searchPlaces } from "./tour.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -23,11 +23,14 @@ function json(status: number, body: unknown): Response {
 
 const fail = (status: number, code: string, message: string) => json(status, { code, message });
 
-async function placesFor(provinceCode: string, cityName: string) {
+async function codesFor(provinceCode: string, cityName: string): Promise<Ldong[]> {
   const codes = matchCity(await loadLdongs(), provinceCode, cityName);
   if (!codes.length) throw new UpstreamError("CITY_NOT_FOUND", `${cityName}의 지역 코드를 찾지 못했어요.`);
-  return loadPlaces(codes);
+  return codes;
 }
+
+const brief = (places: { id: string; name: string; type: string; meta: string }[]) =>
+  places.map(({ id, name, type, meta }) => ({ id, name, type, meta }));
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -47,11 +50,19 @@ Deno.serve(async (req) => {
     return fail(400, "BAD_REQUEST", "provinceCode(두 자리)와 cityName이 필요해요.");
   }
 
+  if (!["places", "weather", "search"].includes(action)) {
+    return fail(400, "BAD_REQUEST", "action은 places, weather, search 중 하나예요.");
+  }
+
   try {
-    const places = await placesFor(provinceCode, cityName);
-    if (action === "places") {
-      return json(200, { places: places.map(({ id, name, type, meta }) => ({ id, name, type, meta })) });
+    const codes = await codesFor(provinceCode, cityName);
+    if (action === "search") {
+      const query = String(body?.query ?? "").trim();
+      if (!query || query.length > 40) return fail(400, "BAD_REQUEST", "query(1~40자)가 필요해요.");
+      return json(200, { places: brief(await searchPlaces(codes, query)) });
     }
+    const places = await loadPlaces(codes);
+    if (action === "places") return json(200, { places: brief(places) });
     if (action === "weather") {
       const center = centerOf(places);
       if (!center) throw new UpstreamError("NO_COORDINATES", "날씨를 볼 위치를 찾지 못했어요.");
@@ -63,7 +74,7 @@ Deno.serve(async (req) => {
       if (!weather) throw new UpstreamError("NO_FORECAST", "그날 예보가 아직 없어요.");
       return json(200, { weather });
     }
-    return fail(400, "BAD_REQUEST", "action은 places 또는 weather예요.");
+    return fail(400, "BAD_REQUEST", "알 수 없는 action이에요.");
   } catch (e) {
     if (e instanceof UpstreamError) {
       console.error("upstream", e.code, e.message);

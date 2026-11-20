@@ -57,6 +57,9 @@ class PlaceSuggestion {
 abstract interface class LifeRepository {
   Future<DayWeather> weather({required String cityId, required DateTime date});
   Future<List<PlaceSuggestion>> places({required String cityId, required List<String> interestKeys});
+
+  /// 이름으로 찾기(그 시·군·구 안, 없으면 도 전체).
+  Future<List<PlaceSuggestion>> search({required String cityId, required String query});
 }
 
 /// 서버가 생기기 전까지 쓰는 강릉 예시 데이터. 숫자는 모두 예시다.
@@ -101,4 +104,11 @@ class FixtureLifeRepository implements LifeRepository {
         ),
         PlaceSuggestion(id: 'jumunjin', name: '주문진 수산시장', type: PlaceType.seafood, meta: '시장 · 해산물'),
       ];
+
+  @override
+  Future<List<PlaceSuggestion>> search({required String cityId, required String query}) async {
+    final q = query.replaceAll(' ', '');
+    final all = await places(cityId: cityId, interestKeys: const []);
+    return [for (final p in all) if (p.name.replaceAll(' ', '').contains(q)) p];
+  }
 }

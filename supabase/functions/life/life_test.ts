@@ -2,7 +2,7 @@
 import { deepStrictEqual as assertEquals, ok as assert } from "node:assert";
 import { itemsOf, xmlError } from "./datago.ts";
 import { kst, latestBase, summarize, toGrid } from "./kma.ts";
-import { areaHint, centerOf, classify, loadLdongs, loadPlaces, matchCity, provinceShort, toPlace } from "./tour.ts";
+import { areaHint, centerOf, classify, imageFirst, loadLdongs, loadPlaces, matchCity, provinceShort, searchPlaces, toPlace } from "./tour.ts";
 
 Deno.test("격자 변환: 기상청 예시 좌표", () => {
   assertEquals(toGrid(37.5665, 126.978), { nx: 60, ny: 127 }); // 서울
@@ -122,6 +122,31 @@ Deno.test("법정동 목록 → 장소 목록(공공데이터 호출을 흉내)"
     const before = calls.length;
     await loadPlaces(codes);
     assertEquals(calls.length, before, "두 번째는 캐시");
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
+
+Deno.test("사진 있는 곳을 앞으로, 검색은 시·군·구에 없으면 도 전체", async () => {
+  assertEquals(imageFirst([{ t: 1 }, { t: 2, firstimage: "x" }, { t: 3 }]).map((i) => i.t), [2, 1, 3]);
+  Deno.env.set("DATA_GO_KR_SERVICE_KEY", "k");
+  const calls: URL[] = [];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = (async (input: string | URL | Request) => {
+    const url = new URL(typeof input === "string" ? input : input instanceof URL ? input : input.url);
+    calls.push(url);
+    const items = url.searchParams.get("lDongSignguCd")
+      ? ""
+      : { item: [{ contentid: "9", title: "강원 어딘가 카페", contenttypeid: "39", addr1: "강원특별자치도 속초시 해오름로 1" }] };
+    return new Response(JSON.stringify({ response: { header: { resultCode: "0000" }, body: { items } } }));
+  }) as typeof fetch;
+  try {
+    const found = await searchPlaces([LDONGS[0]], "카페");
+    assertEquals(found.map((p) => [p.name, p.type]), [["강원 어딘가 카페", "cafe"]]);
+    assertEquals(calls.map((u) => u.pathname.split("/").pop()), ["searchKeyword2", "searchKeyword2"]);
+    assertEquals(calls[0].searchParams.get("keyword"), "카페");
+    assertEquals(calls[0].searchParams.get("lDongSignguCd"), "150");
+    assertEquals(calls[1].searchParams.get("lDongSignguCd"), null);
   } finally {
     globalThis.fetch = realFetch;
   }

@@ -29,6 +29,16 @@ class CheckIn {
   final DateTime at;
 }
 
+/// 여행 전·중에 "가볼 곳"으로 담아 둔 장소. 체크인은 여기서 하거나 추천·검색에서 바로 해도 된다.
+class PlannedPlace {
+  const PlannedPlace({required this.id, required this.name, required this.type, this.meta = ''});
+
+  final String id;
+  final String name;
+  final PlaceType type;
+  final String meta;
+}
+
 class TripDay {
   const TripDay({required this.index, required this.date, required this.checkIns});
 
@@ -48,7 +58,9 @@ class Trip {
     required this.provinceName,
     required this.startDate,
     List<CheckIn> checkIns = const [],
-  }) : checkIns = List.unmodifiable([...checkIns]..sort((a, b) => a.at.compareTo(b.at)));
+    List<PlannedPlace> planned = const [],
+  })  : checkIns = List.unmodifiable([...checkIns]..sort((a, b) => a.at.compareTo(b.at))),
+        planned = List.unmodifiable(planned);
 
   final String id;
   final String cityId;
@@ -61,15 +73,19 @@ class Trip {
   /// 시간 오름차순.
   final List<CheckIn> checkIns;
 
+  /// 가볼 곳(담은 순서).
+  final List<PlannedPlace> planned;
+
   String get title => '${cityName.replaceAll(RegExp(r'(시|군|구)$'), '')} 여행';
 
-  Trip copyWith({List<CheckIn>? checkIns}) => Trip(
+  Trip copyWith({List<CheckIn>? checkIns, List<PlannedPlace>? planned}) => Trip(
         id: id,
         cityId: cityId,
         cityName: cityName,
         provinceName: provinceName,
         startDate: startDate,
         checkIns: checkIns ?? this.checkIns,
+        planned: planned ?? this.planned,
       );
 
   /// 체크인을 날짜별로 묶는다. 체크인이 없는 날은 만들지 않는다.

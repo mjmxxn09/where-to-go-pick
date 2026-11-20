@@ -136,4 +136,34 @@ void main() {
     expect(back.checkIns.single.type, PlaceType.cafe);
     expect(tripFromRow({'id': 1}), isNull);
   });
+
+  test('가볼 곳은 담고 빼고, 저장·서버 행에도 남는다', () async {
+    final store = MemoryTripStore();
+    final controller = TripController(clock: () => DateTime(2026, 11, 20), store: store)
+      ..startTrip(cityId: '32030', cityName: '강릉시', provinceName: '강원특별자치도');
+    controller.togglePlanned(_place);
+    const other = PlaceSuggestion(id: 'tour:2', name: '테라로사', type: PlaceType.cafe, meta: '카페');
+    controller.togglePlanned(other);
+    expect(controller.trip!.planned.map((p) => p.id), ['gyeongpo', 'tour:2']);
+    expect(controller.isPlanned('tour:2'), isTrue);
+    controller.togglePlanned(_place);
+    expect(controller.trip!.planned.map((p) => p.name), ['테라로사']);
+    await Future<void>.delayed(Duration.zero);
+
+    final saved = decodeTripLog(encodeTripLog(store.log)).trips.single;
+    expect(saved.planned.single.type, PlaceType.cafe);
+    expect(saved.planned.single.meta, '카페');
+
+    final row = tripToRow(saved, 'g');
+    expect(row['planned'], [
+      {'id': 'tour:2', 'name': '테라로사', 'type': 'cafe', 'meta': '카페'},
+    ]);
+    expect(tripFromRow({...row, 'check_ins': <Object>[]})!.planned.single.id, 'tour:2');
+  });
+
+  test('합칠 때 가볼 곳은 기기 쪽 목록을 그대로 쓴다', () {
+    final local = _trip('t1').copyWith(planned: const []);
+    final remote = _trip('t1').copyWith(planned: const [PlannedPlace(id: 'x', name: 'X', type: PlaceType.other)]);
+    expect(mergeTrips([local], [remote]).single.planned, isEmpty);
+  });
 }

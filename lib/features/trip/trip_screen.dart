@@ -10,7 +10,7 @@ import '../trip_card/trip_card_screen.dart';
 import 'trip_controller.dart';
 import 'trip_models.dart';
 
-/// 3 · 여행 중: 그날 날씨, 명소·맛집 추천, 버튼 한 번 체크인, 시간순 기록.
+/// 3 · 여행 중: 그날 날씨, 가볼 곳(☆로 담은 곳), 명소·맛집 추천과 이름 검색, 버튼 한 번 체크인, 시간순 기록.
 class TripScreen extends StatefulWidget {
   const TripScreen({super.key});
 
@@ -32,6 +32,32 @@ class _TripScreenState extends State<TripScreen> {
   String? _picked;
   int? _points;
 
+  final _searchCtrl = TextEditingController();
+  String _query = '';
+  Future<List<PlaceSuggestion>>? _results;
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  void _search(String cityId, String text) {
+    final query = text.trim();
+    setState(() {
+      _query = query;
+      _results = query.isEmpty ? null : AppScope.of(context).life.search(cityId: cityId, query: query);
+    });
+  }
+
+  void _clearSearch() {
+    _searchCtrl.clear();
+    setState(() {
+      _query = '';
+      _results = null;
+    });
+  }
+
   void _ensureLoaded(Trip trip) {
     if (_loadedCity == trip.cityId) return;
     final scope = AppScope.of(context);
@@ -39,6 +65,10 @@ class _TripScreenState extends State<TripScreen> {
     _places = scope.pickle.myInterestKeys().then((keys) => scope.life.places(cityId: trip.cityId, interestKeys: keys));
     _weather = scope.life.weather(cityId: trip.cityId, date: DateTime.now());
     _myVotes = {};
+    _query = '';
+    _results = null;
+    // 빌드 중이라 글자 지우기는 다음 프레임에(입력창이 듣고 있으면 빌드 중 갱신 오류가 난다).
+    if (_searchCtrl.text.isNotEmpty) WidgetsBinding.instance.addPostFrameCallback((_) => _searchCtrl.clear());
     scope.votes.myPlaceVotes(trip.cityId).then((v) {
       if (mounted && _loadedCity == trip.cityId) setState(() => _myVotes = v);
     });
@@ -115,6 +145,16 @@ class _TripScreenState extends State<TripScreen> {
     );
   }
 
+  Widget _tile(TripController controller, Trip trip, PlaceSuggestion p) => _PlaceTile(
+        place: p,
+        done: controller.isCheckedIn(p.id),
+        planned: controller.isPlanned(p.id),
+        voted: _myVotes.contains(p.id),
+        onCheckIn: () => _checkIn(controller, p),
+        onTogglePlan: () => controller.togglePlanned(p),
+        onVote: () => _togglePlaceVote(trip.cityId, p.id),
+      );
+
   Widget _list(BuildContext context, TripController controller, Trip trip) {
     return ListView(
       padding: const EdgeInsets.all(Gap.m),
@@ -127,43 +167,81 @@ class _TripScreenState extends State<TripScreen> {
         const SizedBox(height: Gap.s + 4),
         _RouteToggle(controller: controller),
         const SizedBox(height: Gap.s + 4),
-        SegmentedButton<bool>(
-          segments: const [
-            ButtonSegment(value: false, label: Text('명소')),
-            ButtonSegment(value: true, label: Text('맛집')),
-          ],
-          selected: {_food},
-          onSelectionChanged: (s) => setState(() => _food = s.first),
+        _SectionTitle(
+          title: '가볼 곳',
+          count: trip.planned.length,
+          done: trip.planned.where((p) => controller.isCheckedIn(p.id)).length,
+        ),
+        const SizedBox(height: Gap.xs),
+        if (trip.planned.isEmpty)
+          const _LoadProblem(message: '아래 추천이나 검색에서 ☆를 눌러 가볼 곳을 담아 둬요.')
+        else
+          for (final p in trip.planned) _tile(controller, trip, PlaceSuggestion(id: p.id, name: p.name, type: p.type, meta: p.meta)),
+        const SizedBox(height: Gap.m),
+        const _SectionTitle(title: '더 찾아보기'),
+        const SizedBox(height: Gap.xs),
+        TextField(
+          controller: _searchCtrl,
+          textInputAction: TextInputAction.search,
+          onSubmitted: (text) => _search(trip.cityId, text),
+          decoration: InputDecoration(
+            hintText: '장소 이름으로 찾기 (예: 커피, 해수욕장)',
+            prefixIcon: const Icon(Icons.search),
+            suffixIcon: _query.isEmpty
+                ? null
+                : IconButton(tooltip: '검색 지우기', icon: const Icon(Icons.close), onPressed: _clearSearch),
+            filled: true,
+            fillColor: AppColors.surface,
+            isDense: true,
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+          ),
         ),
         const SizedBox(height: Gap.s),
-        FutureBuilder<List<PlaceSuggestion>>(
-          future: _places,
-          builder: (context, snap) {
-            final places = (snap.data ?? const <PlaceSuggestion>[]).where((p) => p.isFood == _food).toList();
-            if (snap.connectionState != ConnectionState.done) {
-              return const Padding(padding: EdgeInsets.all(Gap.m), child: LinearProgressIndicator());
-            }
-            if (snap.hasError) {
-              return _LoadProblem(
-                message: '추천 장소를 불러오지 못했어요.',
-                onRetry: () => setState(() => _loadedCity = null),
-              );
-            }
-            if (places.isEmpty) {
-              return _LoadProblem(message: _food ? '이 지역 맛집을 아직 못 찾았어요.' : '이 지역 명소를 아직 못 찾았어요.');
-            }
-            return Column(children: [
-              for (final p in places)
-                _PlaceTile(
-                  place: p,
-                  done: controller.isCheckedIn(p.id),
-                  voted: _myVotes.contains(p.id),
-                  onCheckIn: () => _checkIn(controller, p),
-                  onVote: () => _togglePlaceVote(trip.cityId, p.id),
-                ),
-            ]);
-          },
-        ),
+        if (_query.isNotEmpty)
+          FutureBuilder<List<PlaceSuggestion>>(
+            future: _results,
+            builder: (context, snap) {
+              if (snap.connectionState != ConnectionState.done) {
+                return const Padding(padding: EdgeInsets.all(Gap.m), child: LinearProgressIndicator());
+              }
+              if (snap.hasError) {
+                return _LoadProblem(message: '찾지 못했어요.', onRetry: () => _search(trip.cityId, _query));
+              }
+              final found = snap.data ?? const <PlaceSuggestion>[];
+              if (found.isEmpty) return _LoadProblem(message: "'$_query'(으)로 찾은 곳이 없어요.");
+              return Column(children: [for (final p in found) _tile(controller, trip, p)]);
+            },
+          )
+        else ...[
+          SegmentedButton<bool>(
+            segments: const [
+              ButtonSegment(value: false, label: Text('명소')),
+              ButtonSegment(value: true, label: Text('맛집')),
+            ],
+            selected: {_food},
+            onSelectionChanged: (s) => setState(() => _food = s.first),
+          ),
+          const SizedBox(height: Gap.s),
+          FutureBuilder<List<PlaceSuggestion>>(
+            future: _places,
+            builder: (context, snap) {
+              final places = (snap.data ?? const <PlaceSuggestion>[]).where((p) => p.isFood == _food).toList();
+              if (snap.connectionState != ConnectionState.done) {
+                return const Padding(padding: EdgeInsets.all(Gap.m), child: LinearProgressIndicator());
+              }
+              if (snap.hasError) {
+                return _LoadProblem(
+                  message: '추천 장소를 불러오지 못했어요.',
+                  onRetry: () => setState(() => _loadedCity = null),
+                );
+              }
+              if (places.isEmpty) {
+                return _LoadProblem(message: _food ? '이 지역 맛집을 아직 못 찾았어요.' : '이 지역 명소를 아직 못 찾았어요.');
+              }
+              return Column(children: [for (final p in places) _tile(controller, trip, p)]);
+            },
+          ),
+        ],
         const SizedBox(height: Gap.m),
         _Timeline(trip: trip),
         const SizedBox(height: Gap.m),
@@ -239,6 +317,31 @@ class _WeatherCard extends StatelessWidget {
   }
 }
 
+/// "가볼 곳 3 · 1곳 다녀옴"
+class _SectionTitle extends StatelessWidget {
+  const _SectionTitle({required this.title, this.count, this.done = 0});
+
+  final String title;
+  final int? count;
+  final int done;
+
+  @override
+  Widget build(BuildContext context) {
+    final count = this.count;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        Text(title, style: titleStyle(18)),
+        if (count != null && count > 0) ...[
+          const SizedBox(width: 6),
+          Text(done > 0 ? '$count곳 · $done곳 다녀옴' : '$count곳',
+              style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+        ],
+      ],
+    );
+  }
+}
+
 /// 장소를 못 불러왔거나 없을 때 한 줄 안내(+ 다시 시도).
 class _LoadProblem extends StatelessWidget {
   const _LoadProblem({required this.message, this.onRetry});
@@ -282,15 +385,19 @@ class _PlaceTile extends StatelessWidget {
   const _PlaceTile({
     required this.place,
     required this.done,
+    required this.planned,
     required this.voted,
     required this.onCheckIn,
+    required this.onTogglePlan,
     required this.onVote,
   });
 
   final PlaceSuggestion place;
   final bool done;
+  final bool planned;
   final bool voted;
   final VoidCallback onCheckIn;
+  final VoidCallback onTogglePlan;
   final VoidCallback onVote;
 
   @override
@@ -326,7 +433,16 @@ class _PlaceTile extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(width: 8),
+          IconButton(
+            tooltip: planned ? '가볼 곳에서 빼기' : '가볼 곳에 담기',
+            isSelected: planned,
+            onPressed: onTogglePlan,
+            visualDensity: VisualDensity.compact,
+            color: const Color(0xFFF2A900),
+            icon: const Icon(Icons.star_border),
+            selectedIcon: const Icon(Icons.star),
+          ),
+          const SizedBox(width: 2),
           done
               ? Semantics(
                   label: '체크인 완료',

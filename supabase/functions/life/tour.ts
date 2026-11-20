@@ -173,12 +173,31 @@ export function toPlace(item: any): Place | null {
   };
 }
 
-/** 콘텐츠 타입별로 몇 개씩: 관광지 · 음식점 · 문화시설 */
+/** 콘텐츠 타입별로 몇 개씩: 관광지 · 음식점 · 문화시설 · 레포츠 · 쇼핑(시장) */
 const KINDS: { typeId: string; rows: number }[] = [
-  { typeId: "12", rows: 20 },
-  { typeId: "39", rows: 15 },
-  { typeId: "14", rows: 6 },
+  { typeId: "12", rows: 40 },
+  { typeId: "39", rows: 30 },
+  { typeId: "14", rows: 10 },
+  { typeId: "28", rows: 10 },
+  { typeId: "38", rows: 10 },
 ];
+
+/** 대표 이미지가 있는 곳(대개 잘 알려진 곳)을 앞으로. 순서는 그대로 유지. */
+export function imageFirst(items: any[]): any[] {
+  return [...items.filter((i) => i.firstimage), ...items.filter((i) => !i.firstimage)];
+}
+
+function toPlaces(items: any[], { skipLodging }: { skipLodging: boolean }): Place[] {
+  const seen = new Set<string>();
+  const out: Place[] = [];
+  for (const item of items) {
+    const p = toPlace(item);
+    if (!p || (skipLodging && p.type === "lodging") || seen.has(p.name)) continue;
+    seen.add(p.name);
+    out.push(p);
+  }
+  return out;
+}
 
 const placeCache = new TtlCache<Place[]>(6 * 60 * 60 * 1000);
 
@@ -193,24 +212,39 @@ export function loadPlaces(codes: Ldong[]): Promise<Place[]> {
             ...COMMON,
             numOfRows: Math.ceil(rows / use.length),
             pageNo: 1,
-            arrange: "Q", // 대표 이미지가 있는 것, 최근 수정순
+            arrange: "C", // 최근 수정순(사진 없는 곳도). 사진 있는 곳은 아래에서 앞으로
             contentTypeId: typeId,
             lDongRegnCd: c.regnCd,
             lDongSignguCd: c.signguCd,
           });
-          return itemsOf(json, OK);
+          return imageFirst(itemsOf(json, OK));
         })
       ),
     );
-    const seen = new Set<string>();
-    const out: Place[] = [];
-    for (const item of lists.flat()) {
-      const p = toPlace(item);
-      if (!p || p.type === "lodging" || seen.has(p.name)) continue;
-      seen.add(p.name);
-      out.push(p);
-    }
-    return out;
+    return toPlaces(lists.flat(), { skipLodging: true });
+  });
+}
+
+const searchCache = new TtlCache<Place[]>(60 * 60 * 1000);
+
+/** 이름으로 찾기. 그 시·군·구 안에서 먼저, 없으면 도 전체에서. */
+export function searchPlaces(codes: Ldong[], query: string): Promise<Place[]> {
+  const first = codes[0];
+  return searchCache.get(`${first.regnCd}-${first.signguCd}:${query}`, async () => {
+    const find = async (signguCd?: string) => {
+      const json = await getJson(`${BASE}/searchKeyword2`, {
+        ...COMMON,
+        numOfRows: 30,
+        pageNo: 1,
+        arrange: "C",
+        keyword: query,
+        lDongRegnCd: first.regnCd,
+        ...(signguCd ? { lDongSignguCd: signguCd } : {}),
+      });
+      return toPlaces(imageFirst(itemsOf(json, OK)), { skipLodging: false });
+    };
+    const inCity = (await Promise.all(codes.slice(0, 2).map((c) => find(c.signguCd)))).flat();
+    return inCity.length ? inCity : find();
   });
 }
 

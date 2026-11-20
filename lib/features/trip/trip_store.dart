@@ -48,6 +48,21 @@ CheckIn? checkInFromJson(Object? json) {
   return CheckIn(id: id, placeName: name, type: placeTypeFromName(json['type']), at: at.toLocal());
 }
 
+Map<String, Object?> plannedToJson(PlannedPlace p) => {'id': p.id, 'name': p.name, 'type': p.type.name, 'meta': p.meta};
+
+PlannedPlace? plannedFromJson(Object? json) {
+  if (json is! Map<String, dynamic>) return null;
+  final id = json['id'];
+  final name = json['name'];
+  if (id is! String || name is! String) return null;
+  final meta = json['meta'];
+  return PlannedPlace(id: id, name: name, type: placeTypeFromName(json['type']), meta: meta is String ? meta : '');
+}
+
+List<PlannedPlace> plannedListFromJson(Object? list) => [
+      if (list is List<dynamic>) ...list.map(plannedFromJson).whereType<PlannedPlace>(),
+    ];
+
 Map<String, Object?> tripToJson(Trip t) => {
       'id': t.id,
       'cityId': t.cityId,
@@ -55,6 +70,7 @@ Map<String, Object?> tripToJson(Trip t) => {
       'provinceName': t.provinceName,
       'startDate': _date(t.startDate),
       'checkIns': [for (final c in t.checkIns) checkInToJson(c)],
+      'planned': [for (final p in t.planned) plannedToJson(p)],
     };
 
 Trip? tripFromJson(Object? json) {
@@ -75,6 +91,7 @@ Trip? tripFromJson(Object? json) {
     provinceName: provinceName,
     startDate: start,
     checkIns: [if (list is List<dynamic>) ...list.map(checkInFromJson).whereType<CheckIn>()],
+    planned: plannedListFromJson(json['planned']),
   );
 }
 
@@ -98,6 +115,7 @@ TripLog decodeTripLog(String? raw) {
 }
 
 /// 두 기록을 합친다. 같은 여행은 체크인을 장소 id로 합치고, 둘 다 있으면 [primary] 쪽을 남긴다.
+/// 가볼 곳은 [primary] 쪽 목록을 그대로 쓴다(뺀 것이 다시 살아나지 않게).
 /// 결과는 시작일 최신순.
 List<Trip> mergeTrips(List<Trip> primary, List<Trip> other) {
   final byId = <String, Trip>{for (final t in other) t.id: t};

@@ -230,6 +230,13 @@ void main() {
         expect(req.url.path, '/functions/v1/life');
         final body = jsonDecode(req.body) as Map<String, dynamic>;
         bodies.add(body);
+        if (body['action'] == 'search') {
+          return _json({
+            'places': [
+              {'id': 'tour:9', 'name': '${body['query']} 하우스', 'type': 'cafe', 'meta': '카페'},
+            ],
+          });
+        }
         if (body['action'] == 'places') {
           return _json({
             'places': [
@@ -274,6 +281,10 @@ void main() {
       expect(w.hourly.single.hour, 18);
       expect(w.tip, contains('우산'));
       await life.weather(cityId: '32030', date: now);
+
+      final found = await life.search(cityId: '32030', query: ' 커피 ');
+      expect(found.single.name, '커피 하우스');
+      expect(bodies.removeLast(), {'action': 'search', 'query': '커피', 'provinceCode': '32', 'cityName': '강릉시'});
 
       expect(bodies, [
         {'action': 'places', 'provinceCode': '32', 'cityName': '강릉시'},

@@ -19,17 +19,26 @@ class SupabaseLifeRepository implements LifeRepository {
   final DateTime Function() _clock;
   final _places = <String, Future<List<PlaceSuggestion>>>{};
   final _weather = <String, Future<DayWeather>>{};
+  final _search = <String, Future<List<PlaceSuggestion>>>{};
 
   @override
   Future<List<PlaceSuggestion>> places({required String cityId, required List<String> interestKeys}) =>
       _memo(_places, cityId, () async {
         final json = await _rest.invoke('life', {'action': 'places', ...await _city(cityId)});
-        final list = json['places'];
-        return [
-          if (list is List<dynamic>)
-            for (final item in list)
-              if (placeSuggestionFromJson(item) case final place?) place,
-        ];
+        return _placeList(json['places']);
+      });
+
+  List<PlaceSuggestion> _placeList(Object? list) => [
+        if (list is List<dynamic>)
+          for (final item in list)
+            if (placeSuggestionFromJson(item) case final place?) place,
+      ];
+
+  @override
+  Future<List<PlaceSuggestion>> search({required String cityId, required String query}) =>
+      _memo(_search, '$cityId|${query.trim()}', () async {
+        final json = await _rest.invoke('life', {'action': 'search', 'query': query.trim(), ...await _city(cityId)});
+        return _placeList(json['places']);
       });
 
   @override

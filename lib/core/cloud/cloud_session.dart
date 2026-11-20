@@ -170,7 +170,12 @@ class CloudSession {
     }
     final res = await _http.post(endpoint('/auth/v1/signup'), headers: _headers, body: jsonEncode({'data': {}}));
     if (res.statusCode != 200) {
-      throw CloudAuthException('guest sign-in ${res.statusCode}', statusCode: res.statusCode);
+      // 422 anonymous_provider_disabled: 대시보드 Authentication에서 Allow anonymous sign-ins가 꺼져 있다.
+      final body = utf8.decode(res.bodyBytes);
+      throw CloudAuthException(
+        'guest sign-in ${res.statusCode}: ${body.length > 200 ? body.substring(0, 200) : body}',
+        statusCode: res.statusCode,
+      );
     }
     return _guestFrom(res);
   }

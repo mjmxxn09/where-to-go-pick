@@ -53,7 +53,10 @@ class SupabaseLifeRepository implements LifeRepository {
     if (hit != null) return hit;
     final future = load();
     cache[key] = future;
-    future.then((_) {}, onError: (Object _) => cache.remove(key));
+    // 실패하면 담아 둔 것을 지운다. (onError가 값을 돌려주면 then의 타입과 안 맞아 오류가 나므로 블록으로)
+    future.then((_) {}, onError: (Object _) {
+      cache.remove(key);
+    });
     return future;
   }
 }

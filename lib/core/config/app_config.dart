@@ -6,12 +6,16 @@ class AppConfig {
     required this.pickleApiBaseUrl,
     required this.lifeApiBaseUrl,
     required this.appVersion,
+    this.supabaseUrl = '',
+    this.supabasePublishableKey = '',
   });
 
   factory AppConfig.fromEnvironment() => const AppConfig(
         pickleApiBaseUrl: String.fromEnvironment('PICKLE_API_BASE_URL'),
         lifeApiBaseUrl: String.fromEnvironment('LIFE_API_BASE_URL'),
         appVersion: String.fromEnvironment('APP_VERSION', defaultValue: '0.1.0'),
+        supabaseUrl: String.fromEnvironment('SUPABASE_URL'),
+        supabasePublishableKey: String.fromEnvironment('SUPABASE_PUBLISHABLE_KEY'),
       );
 
   /// 픽클(VoteLock) Backend `/v1` 주소. 예: https://dev-api.example.com
@@ -22,6 +26,15 @@ class AppConfig {
 
   final String appVersion;
 
+  /// 여행 기록을 보관하는 Supabase 프로젝트 주소. 예: https://xxxx.supabase.co
+  final String supabaseUrl;
+
+  /// Supabase publishable(anon) 키. 앱에 들어가도 되는 공개 키다. secret·service_role 키는 절대 넣지 않는다.
+  final String supabasePublishableKey;
+
   bool get usePickleFixtures => pickleApiBaseUrl.isEmpty;
   bool get useLifeFixtures => lifeApiBaseUrl.isEmpty;
+
+  /// 둘 다 있어야 여행 기록을 Supabase에 올린다. 없으면 폰에만 저장한다.
+  bool get useCloud => supabaseUrl.isNotEmpty && supabasePublishableKey.isNotEmpty;
 }

@@ -1,7 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../core/auth/token_store.dart';
+import '../core/cloud/cloud_session.dart';
+import '../core/cloud/supabase_rest.dart';
 import '../core/config/app_config.dart';
 import '../core/life/life_repository.dart';
 import '../core/pickle/pickle_api_client.dart';
@@ -16,8 +20,10 @@ import '../features/splash/pickle_login_sheet.dart';
 import '../features/splash/splash_character.dart';
 import '../features/splash/start_screen.dart';
 import '../features/trip/sample_trip.dart';
+import '../features/trip/trip_cloud.dart';
 import '../features/trip/trip_controller.dart';
 import '../features/trip/trip_screen.dart';
+import '../features/trip/trip_store.dart';
 import 'app_scope.dart';
 
 class WhereToGoPickApp extends StatefulWidget {
@@ -36,21 +42,48 @@ class WhereToGoPickApp extends StatefulWidget {
 }
 
 class _WhereToGoPickAppState extends State<WhereToGoPickApp> {
+  late final PickleApiClient? _pickleClient = widget.config.usePickleFixtures
+      ? null
+      : PickleApiClient(
+          baseUrl: widget.config.pickleApiBaseUrl,
+          tokenStore: SecureTokenStore(),
+          appVersion: widget.config.appVersion,
+        );
   late final PickleRepository _pickle = widget.pickle ?? _createPickle();
+  // 여행 기록 서버(Supabase). 주소·키가 없으면 null이고 기록은 폰에만 남는다.
+  late final SupabaseRest? _cloud = _createCloud();
   late final LifeRepository _life = widget.life ?? const FixtureLifeRepository();
   // 픽클 투표는 서버 쪽 정책(채널·지역 연결·다녀온 사람 표)이 정해질 때까지 예시 구현만 쓴다.
   late final VoteRepository _votes = widget.votes ?? FixtureVoteRepository();
-  // 서버가 없을 때는 예시 여행(강릉 2박 3일)으로 화면을 채운다.
-  late final TripController _trip =
-      TripController(initial: widget.config.useLifeFixtures ? sampleGangneungTrip() : null);
+  // 서버가 없을 때는 예시 여행(강릉 2박 3일)으로 화면을 채운다. 저장된 여행이 있으면 그쪽이 먼저다.
+  late final TripController _trip = TripController(
+    initial: widget.config.useLifeFixtures ? sampleGangneungTrip() : null,
+    store: PrefsTripStore(),
+    cloud: _tripCloud(),
+  )..restore();
   late final Future<KoreaMapData> _mapData = widget.mapData ?? KoreaMapData.load(rootBundle);
 
   PickleRepository _createPickle() {
-    if (widget.config.usePickleFixtures) return const FixturePickleRepository();
-    return RemotePickleRepository(PickleApiClient(
-      baseUrl: widget.config.pickleApiBaseUrl,
-      tokenStore: SecureTokenStore(),
-      appVersion: widget.config.appVersion,
+    final client = _pickleClient;
+    if (client == null) return const FixturePickleRepository();
+    return RemotePickleRepository(client);
+  }
+
+  TripCloud? _tripCloud() {
+    final cloud = _cloud;
+    return cloud == null ? null : SupabaseTripCloud(cloud);
+  }
+
+  SupabaseRest? _createCloud() {
+    final config = widget.config;
+    if (!config.useCloud) return null;
+    final client = _pickleClient;
+    return SupabaseRest(CloudSession(
+      url: config.supabaseUrl,
+      publishableKey: config.supabasePublishableKey,
+      pickleToken: client == null ? null : ({bool refresh = false}) => client.accessToken(refresh: refresh),
+      // 픽클 서버 없이 개발할 때만 게스트(익명) 로그인으로 올린다.
+      allowGuest: config.usePickleFixtures,
     ));
   }
 
@@ -70,6 +103,7 @@ class _WhereToGoPickAppState extends State<WhereToGoPickApp> {
       trip: _trip,
       mapData: _mapData,
       visitedCityIds: widget.config.useLifeFixtures ? sampleVisitedCityIds : const <String>{},
+      cloud: _cloud,
       child: MaterialApp(
         title: '어디갈지 Pick!',
         debugShowCheckedModeBanner: false,
@@ -137,7 +171,10 @@ class _StartGateState extends State<StartGate> {
       return;
     }
     final ok = await showPickleLoginSheet(context, scope.pickle);
-    if (ok && mounted) setState(() => _entered = true);
+    if (!ok || !mounted) return;
+    setState(() => _entered = true);
+    // 로그인 전에 남긴 기록도 이제 픽클 계정으로 올린다.
+    unawaited(scope.trip.sync());
   }
 
   void _kakaoLogin() {

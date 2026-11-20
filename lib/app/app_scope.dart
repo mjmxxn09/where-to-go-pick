@@ -1,5 +1,6 @@
 import 'package:flutter/widgets.dart';
 
+import '../core/cloud/supabase_rest.dart';
 import '../core/config/app_config.dart';
 import '../core/life/life_repository.dart';
 import '../core/pickle/pickle_repository.dart';
@@ -18,6 +19,7 @@ class AppScope extends InheritedWidget {
     required this.trip,
     required this.mapData,
     required this.visitedCityIds,
+    this.cloud,
     required super.child,
   });
 
@@ -33,6 +35,9 @@ class AppScope extends InheritedWidget {
   /// 다녀온 시·군·구 코드. 생활 서버가 생기면 서버 값으로 바꾼다.
   final Set<String> visitedCityIds;
 
+  /// 여행 기록 서버(Supabase). 설정이 없으면 null — 기록은 폰에만 남는다.
+  final SupabaseRest? cloud;
+
   static AppScope of(BuildContext context) {
     final scope = context.dependOnInheritedWidgetOfExactType<AppScope>();
     assert(scope != null, 'AppScope가 위젯 트리에 없어요.');
@@ -41,5 +46,5 @@ class AppScope extends InheritedWidget {
 
   @override
   bool updateShouldNotify(AppScope oldWidget) =>
-      pickle != oldWidget.pickle || life != oldWidget.life || votes != oldWidget.votes || trip != oldWidget.trip;
+      pickle != oldWidget.pickle || life != oldWidget.life || votes != oldWidget.votes || trip != oldWidget.trip || cloud != oldWidget.cloud;
 }

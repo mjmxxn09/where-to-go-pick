@@ -93,6 +93,18 @@ class PickleApiClient {
 
   Future<bool> get hasSession async => (await _tokens.read()) != null;
 
+  /// 다른 서버(여행 기록 Supabase)에 이 사용자임을 보여 줄 픽클 access token. 로그인 전이면 null.
+  /// [refresh]면 픽클 refresh를 거친 새 토큰(동시에 여러 번 불러도 refresh는 한 번만 나간다). 실패하면 null.
+  Future<String?> accessToken({bool refresh = false}) async {
+    if (!refresh) return (await _tokens.read())?.accessToken;
+    if ((await _tokens.read()) == null) return null;
+    try {
+      return (await _refresh()).accessToken;
+    } on ApiException {
+      return null;
+    }
+  }
+
   Future<AuthTokens> _refresh() {
     return _refreshing ??= (() async {
       try {

@@ -1,0 +1,8 @@
+# Supabase CLI 설정. 원격 프로젝트에 연결: supabase link --project-ref <project ref>
+# 여기 없는 항목은 CLI 기본값을 쓴다. 비밀값은 이 파일에 넣지 않는다(supabase secrets set).
+project_id = "where-to-go-pick"
+
+# 앱은 아직 Supabase 토큰이 없을 때 이 함수를 부르므로, 게이트웨이의 JWT 검사를 끈다.
+# 함수가 직접 픽클 토큰을 확인한다.
+[functions.pickle-exchange]
+verify_jwt = false

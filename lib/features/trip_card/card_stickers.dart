@@ -3,7 +3,7 @@
 /// - 카드는 길·시간·장소 이름만 그리고, 스티커는 유저가 직접 붙인다(빈 카드로 시작).
 /// - 좌표는 카드 좌표계(가로 358 기준, [TripCardLayoutConfig.pageWidth])의 스티커 **중심**이다.
 /// - 카드 한 장(페이지)마다 따로 저장한다. "한 장에 모아보기"와 "하루씩 나눠보기"는 배치가 달라 서로 다른 장으로 본다.
-/// - 지금은 기기에만 저장(shared_preferences). 생활 서버가 생기면 여행과 함께 서버에 올린다.
+/// - 기기에 저장(shared_preferences)하고, Supabase가 설정돼 있으면 바뀐 쪽만 서버에도 올린다([CardCloud]).
 library;
 
 import 'dart:async';
@@ -15,6 +15,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../trip/trip_models.dart';
+import 'card_cloud.dart';
 import 'place_sticker_match.dart';
 import 'sticker_book.dart';
 import 'trip_card_layout.dart';
@@ -235,33 +236,69 @@ Map<String, Map<String, StopEdit>> decodeStopEdits(String? raw) {
 }
 
 /// 카드별 꾸미기 상태: 붙인 스티커와 옮긴 장소 막대([StopEdit], 체크인 id별). 바뀔 때마다 알리고 기기에 저장한다.
+/// [CardCloud]가 있으면 열 때 서버 것을 받아 기기에 없는 쪽만 채우고, 저장할 때 바뀐 쪽을 올린다.
 class CardStickerStore extends ChangeNotifier {
-  CardStickerStore._(this._prefs, this._pages, this._stops);
+  CardStickerStore._(this._prefs, this._pages, this._stops, [this._cloud]);
 
   /// 저장하지 않는 메모리 전용(테스트·저장소를 못 열었을 때).
-  factory CardStickerStore.memory([Map<String, List<PlacedSticker>>? pages]) =>
-      CardStickerStore._(null, {for (final e in (pages ?? const {}).entries) e.key: [...e.value]}, {});
+  factory CardStickerStore.memory([Map<String, List<PlacedSticker>>? pages, CardCloud? cloud]) =>
+      CardStickerStore._(null, {for (final e in (pages ?? const {}).entries) e.key: [...e.value]}, {}, cloud);
 
   static const prefsKey = 'trip_card_stickers.v1';
   static const stopsPrefsKey = 'trip_card_stops.v1';
 
-  static Future<CardStickerStore> load() async {
+  static Future<CardStickerStore> load({CardCloud? cloud}) async {
+    CardStickerStore store;
     try {
       final prefs = await SharedPreferences.getInstance();
-      return CardStickerStore._(
+      store = CardStickerStore._(
         prefs,
         decodeStickerPages(prefs.getString(prefsKey)),
         decodeStopEdits(prefs.getString(stopsPrefsKey)),
+        cloud,
       );
     } on Object {
-      return CardStickerStore.memory();
+      store = CardStickerStore.memory(null, cloud);
     }
+    unawaited(store.pullFromCloud());
+    return store;
   }
 
   final SharedPreferences? _prefs;
   final Map<String, List<PlacedSticker>> _pages;
   final Map<String, Map<String, StopEdit>> _stops;
+  final CardCloud? _cloud;
+
+  /// 서버에 아직 안 올린 쪽.
+  final Set<String> _dirty = {};
   var _seq = 0;
+  var _disposed = false;
+
+  /// 서버 꾸미기를 받아, 이 기기에 아무것도 없는 쪽만 채운다(기기 쪽이 우선). 못 올린 쪽이 있으면 같이 올린다.
+  Future<void> pullFromCloud() async {
+    final cloud = _cloud;
+    if (cloud == null) return;
+    try {
+      final remote = await cloud.pull();
+      if (_disposed) return;
+      var filled = false;
+      for (final page in remote) {
+        if (page.isEmpty || _pages.containsKey(page.pageKey) || _stops.containsKey(page.pageKey)) continue;
+        if (page.stickers.isNotEmpty) _pages[page.pageKey] = [...page.stickers];
+        if (page.stopEdits.isNotEmpty) _stops[page.pageKey] = {...page.stopEdits};
+        filled = true;
+      }
+      if (filled) {
+        notifyListeners();
+        await _saveLocal();
+      }
+      final remoteKeys = {for (final p in remote) p.pageKey};
+      _dirty.addAll({..._pages.keys, ..._stops.keys}.where((k) => !remoteKeys.contains(k)));
+      await _pushDirty();
+    } on Object catch (e) {
+      debugPrint('카드 꾸미기를 서버에서 받지 못했어요(기기에는 남아 있어요): $e');
+    }
+  }
 
   /// 이 카드에서 옮긴 장소 막대들(체크인 id → 편집).
   Map<String, StopEdit> stopEditsOf(String pageKey) => Map.unmodifiable(_stops[pageKey] ?? const <String, StopEdit>{});
@@ -275,7 +312,7 @@ class CardStickerStore extends ChangeNotifier {
     } else {
       (_stops[pageKey] ??= {})[checkInId] = edit;
     }
-    _changed(save: save);
+    _changed(pageKey, save: save);
   }
 
   List<PlacedSticker> stickersOf(String pageKey) => List.unmodifiable(_pages[pageKey] ?? const <PlacedSticker>[]);
@@ -284,7 +321,7 @@ class CardStickerStore extends ChangeNotifier {
 
   void add(String pageKey, PlacedSticker sticker) {
     (_pages[pageKey] ??= []).add(sticker);
-    _changed();
+    _changed(pageKey);
   }
 
   /// [save]=false면 화면만 갱신하고 저장은 미룬다(끌어서 옮기는 중). 끝나면 [persist]를 부른다.
@@ -293,7 +330,7 @@ class CardStickerStore extends ChangeNotifier {
     final i = list?.indexWhere((s) => s.id == sticker.id) ?? -1;
     if (list == null || i < 0) return;
     list[i] = sticker;
-    _changed(save: save);
+    _changed(pageKey, save: save);
   }
 
   void remove(String pageKey, String id) {
@@ -301,7 +338,7 @@ class CardStickerStore extends ChangeNotifier {
     if (list == null) return;
     list.removeWhere((s) => s.id == id);
     if (list.isEmpty) _pages.remove(pageKey);
-    _changed();
+    _changed(pageKey);
   }
 
   /// 맨 위로 올린다(가장 나중에 그린다).
@@ -310,7 +347,7 @@ class CardStickerStore extends ChangeNotifier {
     final i = list?.indexWhere((s) => s.id == id) ?? -1;
     if (list == null || i < 0 || i == list.length - 1) return;
     list.add(list.removeAt(i));
-    _changed();
+    _changed(pageKey);
   }
 
   void replaceAll(String pageKey, List<PlacedSticker> stickers) {
@@ -319,20 +356,58 @@ class CardStickerStore extends ChangeNotifier {
     } else {
       _pages[pageKey] = [...stickers];
     }
-    _changed();
+    _changed(pageKey);
   }
 
   void clear(String pageKey) => replaceAll(pageKey, const []);
 
+  /// 기기에 저장하고, 바뀐 쪽을 서버에 올린다(서버는 실패해도 다음에 다시).
   Future<void> persist() async {
+    await _saveLocal();
+    await _pushDirty();
+  }
+
+  Future<void> _saveLocal() async {
     final prefs = _prefs;
     if (prefs == null) return;
     await prefs.setString(prefsKey, encodeStickerPages(_pages));
     await prefs.setString(stopsPrefsKey, encodeStopEdits(_stops));
   }
 
-  void _changed({bool save = true}) {
+  Future<void> _pushDirty() async {
+    final cloud = _cloud;
+    if (cloud == null || _dirty.isEmpty) return;
+    final keys = {..._dirty};
+    _dirty.clear();
+    try {
+      await cloud.push([
+        for (final k in keys)
+          CardDecoration(pageKey: k, stickers: [...?_pages[k]], stopEdits: {...?_stops[k]}),
+      ]);
+    } on Object catch (e) {
+      _dirty.addAll(keys);
+      debugPrint('카드 꾸미기를 올리지 못했어요(기기에는 남아 있어요): $e');
+    }
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    _pushTimer?.cancel();
+    super.dispose();
+  }
+
+  Timer? _pushTimer;
+
+  void _changed(String pageKey, {bool save = true}) {
+    _dirty.add(pageKey);
     notifyListeners();
-    if (save) unawaited(persist());
+    if (!save) return;
+    unawaited(_saveLocal());
+    // 스티커를 연달아 붙일 때마다 올리지 않고, 손을 멈추면 한 번에 올린다.
+    if (_cloud != null) {
+      _pushTimer?.cancel();
+      _pushTimer = Timer(const Duration(seconds: 2), () => unawaited(_pushDirty()));
+    }
   }
 }

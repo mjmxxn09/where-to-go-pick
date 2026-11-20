@@ -6,6 +6,7 @@ import '../../core/theme/app_surfaces.dart';
 import '../../core/theme/app_theme.dart';
 import '../korea_map/korea_map_data.dart';
 import '../korea_map/korea_map_view.dart';
+import '../trip/trip_controller.dart';
 
 /// 1 · 내 여행 지도: 다녀온 시·군·구가 색칠된 지도와 지금 여행 바로가기.
 class MyMapScreen extends StatefulWidget {
@@ -20,17 +21,34 @@ class MyMapScreen extends StatefulWidget {
 
 class _MyMapScreenState extends State<MyMapScreen> {
   Future<PickleFriend?>? _friend;
+  TripController? _listening;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _friend ??= AppScope.of(context).pickle.myFriend();
+    final scope = AppScope.of(context);
+    _friend ??= scope.pickle.myFriend();
+    // 체크인하거나 서버에서 지난 여행을 받아 오면 지도를 다시 칠한다.
+    if (!identical(_listening, scope.trip)) {
+      _listening?.removeListener(_onTripChanged);
+      _listening = scope.trip..addListener(_onTripChanged);
+    }
+  }
+
+  void _onTripChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    _listening?.removeListener(_onTripChanged);
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final scope = AppScope.of(context);
-    final visited = scope.visitedCityIds;
+    final visited = {...scope.visitedCityIds, ...scope.trip.visitedCityIds};
     final paintedProvinces = visited.map((id) => id.substring(0, 2)).toSet().length;
 
     return ListView(

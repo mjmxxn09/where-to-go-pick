@@ -4,6 +4,7 @@ import '../../app/app_scope.dart';
 import '../../core/theme/app_theme.dart';
 import '../trip/trip_models.dart';
 import '../votes/poll_screen.dart';
+import 'card_cloud.dart';
 import 'card_stickers.dart';
 import 'sticker_book.dart';
 import 'sticker_tray.dart';
@@ -47,7 +48,8 @@ class _TripCardScreenState extends State<TripCardScreen> {
       }
       setState(() => _book = book);
     });
-    CardStickerStore.load().then((store) {
+    final cloud = AppScope.of(context).cloud;
+    CardStickerStore.load(cloud: cloud == null ? null : SupabaseCardCloud(cloud)).then((store) {
       if (!mounted) {
         store.dispose();
         return;

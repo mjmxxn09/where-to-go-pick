@@ -78,6 +78,9 @@ class StickerBook {
     'landmark_windy_hill',
     'landmark_gwangmyeong_cave',
     'landmark_imjingak',
+    'landmark_cathedral',
+    'landmark_temple',
+    'landmark_church',
   ];
 
   static const moveStickers = ['move_bus', 'move_car', 'move_bike', 'move_plane', 'move_ship', 'move_walk'];

@@ -17,7 +17,20 @@ void main() {
     expect(pick('솔향수목원', PlaceType.nature), 'place_nature_forest');
     expect(pick('담양 죽녹원', PlaceType.nature), 'place_nature_bamboo');
     expect(pick('남한산성', PlaceType.heritage), 'place_heritage_fortress');
-    expect(pick('양산 통도사', PlaceType.heritage), 'place_heritage_pagoda');
+    expect(pick('양산 통도사', PlaceType.heritage), 'landmark_temple');
+    expect(pick('양산 통도사', PlaceType.heritage, has: (n) => !n.startsWith('landmark_')), 'place_heritage_pagoda');
+  });
+
+  test('성당·절·교회는 명소 스티커', () {
+    expect(pick('명동성당', PlaceType.heritage), 'landmark_cathedral');
+    expect(pick('전주 전동성당', PlaceType.culture), 'landmark_cathedral');
+    expect(pick('해미순교성지', PlaceType.other), 'landmark_cathedral');
+    expect(pick('강경 북옥감리교회', PlaceType.heritage), 'landmark_church');
+    expect(pick('여수 향일암', PlaceType.heritage), 'landmark_temple');
+    expect(pick('월정사 템플스테이', PlaceType.leisure), 'landmark_temple');
+    expect(pick('공주 마곡사', PlaceType.heritage), 'landmark_temple');
+    expect(pick('부산 해동용궁사', PlaceType.heritage), 'landmark_haedong_yonggungsa');
+    expect(pick('강릉 선교장', PlaceType.heritage), isNot('landmark_church'));
   });
 
   test('한국관광 100선으로 더한 스티커', () {

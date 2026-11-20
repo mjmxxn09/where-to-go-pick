@@ -57,7 +57,7 @@ const placeNameKeywords = <(List<String>, String)>[
   (['섬', '독도', '울릉도', '우도', '제부도'], 'place_beach_island'),
   // 문화유산
   (['왕릉', '고분', '첨성대', '유적', '월지', '릉원', '능원', '광한루', '현충사'], 'place_heritage_tomb'),
-  (['탑', '사찰', '암자', '대웅전', '석굴암'], 'place_heritage_pagoda'),
+  (['탑', '석굴암'], 'place_heritage_pagoda'),
   (['산성', '읍성', '성곽', '성벽', '화성', '요새', '진주성'], 'place_heritage_fortress'),
   (['한옥', '고택', '향교', '서원', '종택', '궁', '민속촌', '하회마을', '서촌'], 'place_heritage_hanok'),
 ];
@@ -111,6 +111,10 @@ const landmarkKeywords = <(List<String>, String)>[
   (['바람의언덕', '바람의 언덕'], 'landmark_windy_hill'),
   (['광명동굴', '동굴'], 'landmark_gwangmyeong_cave'),
   (['임진각', '평화누리', 'DMZ', '비무장지대'], 'landmark_imjingak'),
+  // 어디에나 있는 종교 명소(이름에 이 말이 있으면). 절 이름(…사·…암)은 아래 끝말 규칙으로도 잡는다.
+  (['성당', '천주교', '순교성지'], 'landmark_cathedral'),
+  (['교회', '예배당'], 'landmark_church'),
+  (['사찰', '대웅전', '템플스테이', '암자'], 'landmark_temple'),
 ];
 
 /// 이름에 흔히 붙는 말. 다른 또렷한 말이 없을 때만 쓴다("○○공원", "○○거리", "○○숲").
@@ -136,7 +140,7 @@ const placeTypeDefaults = <PlaceType, String>{
 /// 1. 이름에 든 말이 그 장소 종류의 스티커와 맞으면 그것(예: 초당순두부마을 → 찌개, 주문진 수산시장 → 회)
 /// 2. 종류가 달라도 이름에 든 말이 맞으면 그것(예: 맛집으로 저장된 "OO 횟집" → 회)
 ///    단 "공원·거리·숲" 같은 흔한 말([weakPlaceWords])은 또렷한 말이 하나도 없을 때만 본다.
-/// 3. 절 이름(…사)은 탑, 자연에서 산 이름(…산·…봉)은 산
+/// 3. 문화유산 중 절 이름(…사·…암)은 절(없으면 탑), 자연에서 산 이름(…산·…봉)은 산
 /// 4. 아니면 종류 대표 스티커. 같은 카드에 이미 쓴 그림([used])이면 같은 종류의 다른 그림
 ///
 /// [has]로 실제 그림이 있는 것만 고른다. 없으면 null.
@@ -162,8 +166,9 @@ String? stickerForPlace(CheckIn place, {required bool Function(String name) has,
       byKeyword(ownTypeOnly: true, weak: true) ??
       byKeyword(ownTypeOnly: false, weak: true);
   if (matched != null) return matched;
-  if (place.type == PlaceType.heritage && name.endsWith('사') && has('place_heritage_pagoda')) {
-    return 'place_heritage_pagoda';
+  if (place.type == PlaceType.heritage && (name.endsWith('사') || name.endsWith('암'))) {
+    if (has('landmark_temple')) return 'landmark_temple';
+    if (has('place_heritage_pagoda')) return 'place_heritage_pagoda';
   }
   // 강 이름(…강)은 강 — 자연·기타로 저장된 곳만
   if ((place.type == PlaceType.nature || place.type == PlaceType.other) && name.endsWith('강') && has('place_nature_river')) {

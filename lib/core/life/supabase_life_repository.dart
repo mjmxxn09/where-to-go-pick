@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 import '../../features/trip/trip_models.dart';
 import '../cloud/supabase_rest.dart';
 import 'life_repository.dart';
@@ -54,8 +56,9 @@ class SupabaseLifeRepository implements LifeRepository {
     final future = load();
     cache[key] = future;
     // 실패하면 담아 둔 것을 지운다. (onError가 값을 돌려주면 then의 타입과 안 맞아 오류가 나므로 블록으로)
-    future.then((_) {}, onError: (Object _) {
+    future.then((_) {}, onError: (Object e) {
       cache.remove(key);
+      debugPrint('여행지 정보를 못 불러왔어요($key): $e');
     });
     return future;
   }

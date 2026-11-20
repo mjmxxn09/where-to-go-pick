@@ -6,3 +6,7 @@ project_id = "where-to-go-pick"
 # 함수가 직접 픽클 토큰을 확인한다.
 [functions.pickle-exchange]
 verify_jwt = false
+
+# 여행지 정보(TourAPI·기상청). 함수 안에서 이 앱 사용자 토큰인지 직접 확인한다(auth.ts).
+[functions.life]
+verify_jwt = false

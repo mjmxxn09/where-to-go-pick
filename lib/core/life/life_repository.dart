@@ -51,7 +51,7 @@ class PlaceSuggestion {
   bool get isFood => type == PlaceType.food || type == PlaceType.market || type == PlaceType.seafood || type == PlaceType.cafe;
 }
 
-/// 생활 서버(신규) 경계. 공공 API 키는 서버에만 두고, 앱은 이 서버만 호출한다.
+/// 여행지 정보 경계. 공공 API 키는 서버(Supabase Edge Function `life`)에만 두고, 앱은 이 경계만 본다.
 /// - 날씨: 기상청 단기예보(위경도 → 격자 변환·캐시는 서버 책임)
 /// - 명소·맛집: 한국관광공사 TourAPI + 픽클 투표
 abstract interface class LifeRepository {

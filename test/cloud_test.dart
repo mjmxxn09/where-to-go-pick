@@ -5,7 +5,10 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:where_to_go_pick/core/cloud/cloud_session.dart';
 import 'package:where_to_go_pick/core/cloud/supabase_rest.dart';
+import 'package:where_to_go_pick/core/life/life_repository.dart';
+import 'package:where_to_go_pick/core/life/supabase_life_repository.dart';
 import 'package:where_to_go_pick/features/trip_card/card_cloud.dart';
+import 'package:where_to_go_pick/features/trip/trip_models.dart';
 import 'package:where_to_go_pick/features/trip_card/card_stickers.dart';
 
 const _url = 'https://demo.supabase.co';
@@ -215,5 +218,86 @@ void main() {
     expect(back.stickers.single.x, 10);
     expect(back.stopEdits, isEmpty);
     expect(cardDecorationFromRow({'page_key': 3}), isNull);
+  });
+
+  group('여행지 정보(Edge Function life)', () {
+    test('도 코드·시 이름으로 장소와 날씨를 묻고, 같은 것은 다시 묻지 않는다', () async {
+      final bodies = <Map<String, dynamic>>[];
+      final client = MockClient((req) async {
+        if (req.url.path.startsWith('/auth/')) {
+          return _json({'access_token': _jwt('g'), 'expires_in': 3600, 'refresh_token': 'r'});
+        }
+        expect(req.url.path, '/functions/v1/life');
+        final body = jsonDecode(req.body) as Map<String, dynamic>;
+        bodies.add(body);
+        if (body['action'] == 'places') {
+          return _json({
+            'places': [
+              {'id': 'tour:1', 'name': '경포해수욕장', 'type': 'beach', 'meta': '해변 · 창해로'},
+              {'id': 'tour:2', 'name': '테라로사', 'type': 'cafe', 'meta': '카페'},
+              {'id': 'bad'},
+            ],
+          });
+        }
+        return _json({
+          'weather': {
+            'sky': 'rainy',
+            'temperature': 12.4,
+            'min': 6,
+            'max': 15,
+            'hourly': [
+              {'hour': 18, 'temperature': 11, 'sky': 'cloudy'},
+            ],
+            'tip': '비 소식이 있어요. 우산 챙기기!',
+          },
+        });
+      });
+      final rest = SupabaseRest(
+        CloudSession(url: _url, publishableKey: _key, allowGuest: true, guestStore: MemoryCloudSecretStore(), httpClient: client),
+        httpClient: client,
+      );
+      final life = SupabaseLifeRepository(
+        rest,
+        (id) async => id == '32030' ? (provinceCode: '32', cityName: '강릉시') : null,
+        clock: () => now,
+      );
+
+      final places = await life.places(cityId: '32030', interestKeys: const []);
+      expect(places.map((p) => p.name), ['경포해수욕장', '테라로사']);
+      expect(places[1].type, PlaceType.cafe);
+      expect(places[1].isFood, isTrue);
+      await life.places(cityId: '32030', interestKeys: const []);
+
+      final w = await life.weather(cityId: '32030', date: now);
+      expect(w.sky, Sky.rainy);
+      expect(w.temperature, 12);
+      expect(w.hourly.single.hour, 18);
+      expect(w.tip, contains('우산'));
+      await life.weather(cityId: '32030', date: now);
+
+      expect(bodies, [
+        {'action': 'places', 'provinceCode': '32', 'cityName': '강릉시'},
+        {'action': 'weather', 'date': '2026-11-20', 'provinceCode': '32', 'cityName': '강릉시'},
+      ]);
+      expect(() => life.places(cityId: '99999', interestKeys: const []), throwsArgumentError);
+    });
+
+    test('실패한 요청은 담아 두지 않아서 다시 부르면 다시 묻는다', () async {
+      var calls = 0;
+      final client = MockClient((req) async {
+        if (req.url.path.startsWith('/auth/')) return _json({'access_token': _jwt('g'), 'expires_in': 3600});
+        calls++;
+        if (calls == 1) return _json({'code': 'SERVICE_KEY_IS_NOT_REGISTERED_ERROR'}, 502);
+        return _json({'places': <Object>[]});
+      });
+      final rest = SupabaseRest(
+        CloudSession(url: _url, publishableKey: _key, allowGuest: true, guestStore: MemoryCloudSecretStore(), httpClient: client),
+        httpClient: client,
+      );
+      final life = SupabaseLifeRepository(rest, (_) async => (provinceCode: '32', cityName: '강릉시'));
+      await expectLater(life.places(cityId: '32030', interestKeys: const []), throwsA(isA<CloudRequestException>()));
+      expect(await life.places(cityId: '32030', interestKeys: const []), isEmpty);
+      expect(calls, 2);
+    });
   });
 }

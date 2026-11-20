@@ -56,6 +56,16 @@ class SupabaseRest {
         ));
   }
 
+  /// Edge Function을 부른다(POST JSON). 응답 JSON 객체를 돌려준다.
+  Future<Map<String, dynamic>> invoke(String function, Map<String, Object?> body) async {
+    final res = await _send((auth) => _http.post(
+          session.endpoint('/functions/v1/$function'),
+          headers: {..._headers(auth), 'Content-Type': 'application/json'},
+          body: jsonEncode(body),
+        ));
+    return jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+  }
+
   Map<String, String> _headers(CloudAuth auth) => {
         'apikey': session.publishableKey,
         'Authorization': 'Bearer ${auth.accessToken}',

@@ -5,10 +5,10 @@
 ```text
 [어디갈지 Pick! 앱 (Flutter)]
    ├─ 픽클 Backend /v1 ─ 로그인, 내 프로필, 관심사, 내 픽클 친구(읽기)
-   ├─ Supabase (여행 기록) ─ 여행·체크인·카드 꾸미기 저장. 픽클 토큰을 Edge Function에서 Supabase 토큰으로 교환
-   └─ 생활 서버 (신규, 아직 없음)
-        ├─ 기상청 단기예보 프록시 + 캐시 (위경도 → 격자 변환은 서버)
-        └─ TourAPI 프록시 + 캐시, 픽클 투표 결과와 합친 추천
+   └─ Supabase (생활 서버 역할)
+        ├─ 여행·체크인·카드 꾸미기 저장. 픽클 토큰을 Edge Function에서 Supabase 토큰으로 교환
+        └─ Edge Function life ─ TourAPI 명소·맛집 + 기상청 단기예보(위경도 → 격자 변환·캐시는 함수)
+           (픽클 투표 결과와 합친 추천은 투표 정책이 정해진 뒤)
 ```
 
 - 여행 기록은 픽클 DB가 아니라 이 앱 전용 Supabase에 둔다. 설정·키 취급·테이블은 [supabase.md](supabase.md).

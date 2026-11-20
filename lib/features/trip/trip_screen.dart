@@ -143,6 +143,15 @@ class _TripScreenState extends State<TripScreen> {
             if (snap.connectionState != ConnectionState.done) {
               return const Padding(padding: EdgeInsets.all(Gap.m), child: LinearProgressIndicator());
             }
+            if (snap.hasError) {
+              return _LoadProblem(
+                message: '추천 장소를 불러오지 못했어요.',
+                onRetry: () => setState(() => _loadedCity = null),
+              );
+            }
+            if (places.isEmpty) {
+              return _LoadProblem(message: _food ? '이 지역 맛집을 아직 못 찾았어요.' : '이 지역 명소를 아직 못 찾았어요.');
+            }
             return Column(children: [
               for (final p in places)
                 _PlaceTile(
@@ -191,7 +200,14 @@ class _WeatherCard extends StatelessWidget {
           padding: const EdgeInsets.all(12),
           decoration: AppDecorations.card,
           child: w == null
-              ? const SizedBox(height: 56, child: Center(child: CircularProgressIndicator()))
+              ? SizedBox(
+                  height: 56,
+                  child: Center(
+                    child: snap.hasError
+                        ? const Text('날씨를 불러오지 못했어요.', style: TextStyle(color: AppColors.textSecondary))
+                        : const CircularProgressIndicator(),
+                  ),
+                )
               : Row(
                   children: [
                     WeatherIcon(sky: w.sky, size: 28),
@@ -219,6 +235,27 @@ class _WeatherCard extends StatelessWidget {
                 ),
         );
       },
+    );
+  }
+}
+
+/// 장소를 못 불러왔거나 없을 때 한 줄 안내(+ 다시 시도).
+class _LoadProblem extends StatelessWidget {
+  const _LoadProblem({required this.message, this.onRetry});
+
+  final String message;
+  final VoidCallback? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: Gap.s),
+      child: Row(
+        children: [
+          Expanded(child: Text(message, style: const TextStyle(color: AppColors.textSecondary))),
+          if (onRetry != null) TextButton(onPressed: onRetry, child: const Text('다시 시도')),
+        ],
+      ),
     );
   }
 }

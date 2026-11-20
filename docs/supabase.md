@@ -8,7 +8,9 @@
  │
  ├─▶ Edge Function pickle-exchange ── 픽클 GET /v1/me 로 확인 → Supabase 토큰(1시간, sub = "pickle:<subjectId>")
  │
- └─▶ Supabase Data API (trips · check_ins · card_decorations, RLS: 내 sub 행만)
+ ├─▶ Supabase Data API (trips · check_ins · card_decorations, RLS: 내 sub 행만)
+ │
+ └─▶ Edge Function life ── 한국관광공사 TourAPI(명소·맛집) · 기상청 단기예보(날씨). 공공데이터 키는 함수 비밀값에만
 ```
 
 - 앱은 **폰에 먼저 저장**하고 서버에 올린다. 서버에 못 올려도 기록은 폰에 남고, 다음에 앱을 열거나 로그인할 때 다시 올린다.
@@ -29,6 +31,17 @@
 | `lib/features/trip/trip_store.dart` | 폰 저장(`trips.v1`), 기록 합치기 |
 | `lib/features/trip/trip_cloud.dart` | 여행·체크인 ↔ 서버 행 |
 | `lib/features/trip_card/card_cloud.dart` | 카드 꾸미기 ↔ 서버 행(바뀐 쪽만, 손을 멈추고 2초 뒤 올림) |
+| `supabase/functions/life/` | 여행지 정보: 법정동 코드 찾기(`tour.ts`), 격자 변환·예보 요약(`kma.ts`), 호출자 확인(`auth.ts`) |
+| `lib/core/life/supabase_life_repository.dart` | 앱 쪽: 지도 id → 도 코드·시 이름으로 `life` 호출, 장소는 앱 켜진 동안·날씨는 한 시간 캐시 |
+
+## 여행지 정보 (Edge Function `life`)
+
+- `POST {action: "places" | "weather", provinceCode: "32", cityName: "강릉시", date?}` — 이 앱 사용자 토큰만 받는다(공공데이터 호출량 보호).
+- 장소: 법정동 시·군·구 목록(`ldongCode2`, 하루 캐시)에서 도시를 찾고, 관광지 20·음식점 15·문화시설 6곳(`areaBasedList2`, 대표 이미지 있는 것, 6시간 캐시).
+  앱 지도는 조금 옛 행정구역이라 이름이 다르면 맞춰 준다(인천 남구 → 미추홀구, 군위군은 대구에서 찾기, 합친 시는 구 두 개까지).
+- 장소 종류: 음식점은 이름으로 카페·해산물·맛집, 관광지는 이름(해수욕장·시장·…사·궁…)과 분류 코드로 해변·시장·문화유산·자연·놀거리.
+- 날씨: 그 도시 장소 좌표의 가운데 → 기상청 격자 → 최신 단기예보(30분 캐시). 지금 기온·하늘, 최저·최고, 3시간 간격 셋, 한 줄 팁.
+- 테스트: `deno test -A supabase/functions/life/life_test.ts`
 
 ## 테이블
 
@@ -74,7 +87,14 @@
    npx supabase functions deploy pickle-exchange
    ```
    픽클 서버가 사내망에서만 열려 있으면 Supabase가 `/v1/me`에 닿지 못한다(502 `PICKLE_UNAVAILABLE`). 외부에서 닿는 주소가 필요하다.
-6. **앱 설정**: `env/dev.json`(커밋되지 않음)에 두 줄 추가 후 `--dart-define-from-file=env/dev.json`으로 실행.
+6. **여행지 정보 함수**: 공공데이터포털에서 `한국관광공사_국문 관광정보 서비스_GW`, `기상청_단기예보 조회서비스` 활용신청 후,
+   `supabase/functions/.env`에 `DATA_GO_KR_SERVICE_KEY=일반 인증키(Decoding)`를 넣고
+   ```bash
+   npx supabase secrets set --env-file supabase/functions/.env
+   npx supabase functions deploy life
+   ```
+   `SERVICE_KEY_IS_NOT_REGISTERED_ERROR`가 나오면 승인 직후일 수 있다(1시간쯤 뒤 다시).
+7. **앱 설정**: `env/dev.json`(커밋되지 않음)에 두 줄 추가 후 `--dart-define-from-file=env/dev.json`으로 실행.
    ```json
    "SUPABASE_URL": "https://vwgtsqjpemvyhmjvlgoe.supabase.co",
    "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_..."
@@ -88,6 +108,7 @@
 | DB 비밀번호 | 비밀번호 관리자, `supabase link` 때만 | 안 된다 |
 | secret 키(`sb_secret_…`, service_role) | 쓰지 않는다 | 안 된다 — RLS를 무시한다 |
 | 서명 개인키(JWK) | `supabase/functions/.env` → `supabase secrets set` | 안 된다 — 아무 사용자 토큰이나 만들 수 있다 |
+| 공공데이터포털 인증키 | `supabase/functions/.env` → `supabase secrets set` | 안 된다 — 남이 쓰면 하루 호출량이 바닥난다 |
 
 ## 출시 전
 

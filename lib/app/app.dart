@@ -8,6 +8,7 @@ import '../core/cloud/cloud_session.dart';
 import '../core/cloud/supabase_rest.dart';
 import '../core/config/app_config.dart';
 import '../core/life/life_repository.dart';
+import '../core/life/supabase_life_repository.dart';
 import '../core/pickle/pickle_api_client.dart';
 import '../core/pickle/pickle_repository.dart';
 import '../core/votes/vote_repository.dart';
@@ -52,7 +53,8 @@ class _WhereToGoPickAppState extends State<WhereToGoPickApp> {
   late final PickleRepository _pickle = widget.pickle ?? _createPickle();
   // 여행 기록 서버(Supabase). 주소·키가 없으면 null이고 기록은 폰에만 남는다.
   late final SupabaseRest? _cloud = _createCloud();
-  late final LifeRepository _life = widget.life ?? const FixtureLifeRepository();
+  // 여행지 정보: Supabase가 연결되면 Edge Function `life`(TourAPI·기상청), 아니면 강릉 예시 데이터.
+  late final LifeRepository _life = widget.life ?? _createLife();
   // 픽클 투표는 서버 쪽 정책(채널·지역 연결·다녀온 사람 표)이 정해질 때까지 예시 구현만 쓴다.
   late final VoteRepository _votes = widget.votes ?? FixtureVoteRepository();
   // 서버가 하나도 없을 때(화면 확인용)만 예시 여행(강릉 2박 3일)과 예시 방문 지역을 보여 준다.
@@ -69,6 +71,23 @@ class _WhereToGoPickAppState extends State<WhereToGoPickApp> {
     final client = _pickleClient;
     if (client == null) return const FixturePickleRepository();
     return RemotePickleRepository(client);
+  }
+
+  LifeRepository _createLife() {
+    final cloud = _cloud;
+    if (cloud == null) return const FixtureLifeRepository();
+    return SupabaseLifeRepository(cloud, _cityOf);
+  }
+
+  /// 지도 id → 도 코드·시·군·구 이름(`31:수원시`처럼 합친 시도 앞 두 자리가 도 코드).
+  Future<({String provinceCode, String cityName})?> _cityOf(String cityId) async {
+    if (cityId.length < 2) return null;
+    final code = cityId.substring(0, 2);
+    final detail = (await _mapData).details[code];
+    for (final city in detail?.cities ?? const <MapRegion>[]) {
+      if (city.id == cityId) return (provinceCode: code, cityName: city.name);
+    }
+    return null;
   }
 
   TripCloud? _tripCloud() {

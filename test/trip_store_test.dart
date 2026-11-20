@@ -33,6 +33,25 @@ class _FakeCloud implements TripCloud {
     pushed.add([for (final t in trips) t.id]);
     remote = mergeTrips(trips, remote);
   }
+
+  final deleted = <String>[];
+
+  @override
+  Future<void> deleteTrip(String tripId) async {
+    if (failPush) throw StateError('offline');
+    deleted.add(tripId);
+    remote = [for (final t in remote) if (t.id != tripId) t];
+  }
+
+  @override
+  Future<void> deleteCheckIn(String tripId, String checkInId) async {
+    if (failPush) throw StateError('offline');
+    deleted.add('$tripId/$checkInId');
+    remote = [
+      for (final t in remote)
+        t.id == tripId ? t.copyWith(checkIns: [for (final c in t.checkIns) if (c.id != checkInId) c]) : t,
+    ];
+  }
 }
 
 const _place = PlaceSuggestion(id: 'gyeongpo', name: '경포해변', type: PlaceType.beach, meta: '해변');
@@ -213,5 +232,106 @@ void main() {
     await controller.restore();
     expect(controller.trip, isNull);
     expect(controller.pastTrips.single.id, 't1');
+  });
+
+  test('여행 기간: 며칠째·D-n·기간 지남, 길이 표시, 날짜 줄', () {
+    final trip = Trip(
+      id: 't',
+      cityId: '39010',
+      cityName: '제주시',
+      provinceName: '제주특별자치도',
+      startDate: DateTime(2026, 11, 30),
+      plannedDays: 3,
+    );
+    expect(trip.lengthLabel, '2박 3일');
+    expect(trip.lastDate, DateTime(2026, 12, 2));
+    expect(trip.statusOn(DateTime(2026, 11, 27, 9)), 'D-3');
+    expect(trip.isBeforeStart(DateTime(2026, 11, 29, 23)), isTrue);
+    expect(trip.statusOn(DateTime(2026, 11, 30, 0, 1)), '오늘 1일차');
+    expect(trip.statusOn(DateTime(2026, 12, 1, 23, 59)), '오늘 2일차');
+    expect(trip.statusOn(DateTime(2026, 12, 3)), '여행 기간이 지났어요');
+    expect(dateRangeLabel(trip.startDate, trip.lastDate), '11월 30일 – 12월 2일');
+    expect(monthDayLabel(DateTime(2026, 11, 20)), '11월 20일 (금)');
+    expect(lengthLabelOf(1), '당일 여행');
+
+    // 정한 기간보다 오래 체크인하면 그만큼 늘어난다.
+    final longer = trip.copyWith(checkIns: [
+      CheckIn(id: 'a', placeName: 'A', type: PlaceType.beach, at: DateTime(2026, 12, 3, 10)),
+    ]);
+    expect(longer.lengthLabel, '3박 4일');
+    // 기간을 정하지 않으면 다녀온 날로.
+    final open = longer.copyWith(setPlannedDays: true, plannedDays: null);
+    expect(open.plannedDays, isNull);
+    expect(open.statusOn(DateTime(2026, 12, 9)), '오늘 10일차');
+  });
+
+  test('출발일·기간을 정해 시작하고 바꾸면 저장·서버 행에 남는다', () async {
+    final store = MemoryTripStore();
+    final controller = TripController(clock: () => DateTime(2026, 11, 20, 10), store: store)
+      ..startTrip(
+        cityId: '39010',
+        cityName: '제주시',
+        provinceName: '제주특별자치도',
+        startDate: DateTime(2026, 11, 28, 15),
+        plannedDays: 3,
+      );
+    expect(controller.trip!.startDate, DateTime(2026, 11, 28));
+    expect(controller.trip!.plannedDays, 3);
+    controller.updateDates(startDate: DateTime(2026, 11, 29), plannedDays: 2);
+    await Future<void>.delayed(Duration.zero);
+    final saved = decodeTripLog(encodeTripLog(store.log)).trips.single;
+    expect(saved.startDate, DateTime(2026, 11, 29));
+    expect(saved.plannedDays, 2);
+    final row = tripToRow(saved, 'g');
+    expect(row['planned_days'], 2);
+    expect(tripFromRow({...row, 'check_ins': <Object>[]})!.plannedDays, 2);
+    expect(plannedDaysFrom(99), isNull);
+  });
+
+  test('체크인 시각 고치기·지우기·되돌리기, 지운 체크인은 서버에서 되살아나지 않는다', () async {
+    final store = MemoryTripStore();
+    final cloud = _FakeCloud();
+    final controller = TripController(clock: () => DateTime(2026, 11, 20, 10), store: store, cloud: cloud)
+      ..startTrip(cityId: '32030', cityName: '강릉시', provinceName: '강원특별자치도');
+    final tripId = controller.trip!.id;
+    controller.checkIn(_place);
+    await Future<void>.delayed(Duration.zero);
+    expect(cloud.remote.single.checkIns, hasLength(1));
+
+    controller.updateCheckIn('gyeongpo', DateTime(2026, 11, 21, 9));
+    expect(controller.trip!.days.single.label, '2일차');
+
+    cloud.failPush = true; // 지울 때 서버에 닿지 않아도
+    final removed = controller.removeCheckIn('gyeongpo')!;
+    await Future<void>.delayed(Duration.zero);
+    expect(controller.trip!.checkIns, isEmpty);
+    expect(store.log.deletedCheckIns, {'$tripId|gyeongpo'});
+
+    // 서버에는 아직 남아 있지만 합칠 때 되살아나지 않고, 다음 sync에서 지운다.
+    cloud.failPush = false;
+    await controller.sync();
+    expect(controller.trip!.checkIns, isEmpty);
+    expect(cloud.deleted, contains('$tripId/gyeongpo'));
+    expect(cloud.remote.single.checkIns, isEmpty);
+
+    controller.restoreCheckIn(removed);
+    expect(controller.trip!.checkIns.single.id, 'gyeongpo');
+  });
+
+  test('여행 지우기: 목록과 서버에서 빠지고, 지금 여행이면 여행 중이 빈다', () async {
+    final store = MemoryTripStore();
+    final cloud = _FakeCloud();
+    final controller = TripController(clock: () => DateTime(2026, 11, 20, 10), store: store, cloud: cloud)
+      ..startTrip(cityId: '32030', cityName: '강릉시', provinceName: '강원특별자치도');
+    final id = controller.trip!.id;
+    await Future<void>.delayed(Duration.zero);
+    controller.deleteTrip(id);
+    expect(controller.trip, isNull);
+    expect(controller.trips, isEmpty);
+    await Future<void>.delayed(Duration.zero);
+    await Future<void>.delayed(Duration.zero);
+    expect(cloud.deleted, [id]);
+    expect(cloud.remote, isEmpty);
+    expect(store.log.deletedTrips, isEmpty, reason: '서버에서 지웠으면 기록을 비운다');
   });
 }

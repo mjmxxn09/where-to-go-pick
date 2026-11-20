@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 
 import '../core/auth/token_store.dart';
 import '../core/cloud/cloud_session.dart';
@@ -42,7 +43,19 @@ class WhereToGoPickApp extends StatefulWidget {
   State<WhereToGoPickApp> createState() => _WhereToGoPickAppState();
 }
 
-class _WhereToGoPickAppState extends State<WhereToGoPickApp> {
+class _WhereToGoPickAppState extends State<WhereToGoPickApp> with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  /// 앱으로 돌아올 때마다 못 올린 기록·지운 것을 서버와 맞춘다(지하철·비행기 모드에서 체크인한 뒤 등).
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) unawaited(_trip.sync());
+  }
+
   late final PickleApiClient? _pickleClient = widget.config.usePickleFixtures
       ? null
       : PickleApiClient(
@@ -110,6 +123,7 @@ class _WhereToGoPickAppState extends State<WhereToGoPickApp> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _trip.dispose();
     super.dispose();
   }
@@ -128,6 +142,10 @@ class _WhereToGoPickAppState extends State<WhereToGoPickApp> {
       child: MaterialApp(
         title: '어디갈지 Pick!',
         debugShowCheckedModeBanner: false,
+        // 날짜·시각 고르기, 뒤로 가기·확인 같은 기본 글자를 한국어로
+        locale: const Locale('ko', 'KR'),
+        supportedLocales: const [Locale('ko', 'KR')],
+        localizationsDelegates: GlobalMaterialLocalizations.delegates,
         theme: buildAppTheme(),
         home: const StartGate(),
       ),

@@ -8,6 +8,12 @@ abstract interface class TripCloud {
 
   /// 같은 여행·체크인은 덮어쓴다(여러 번 보내도 안전).
   Future<void> push(List<Trip> trips);
+
+  /// 여행을 지운다(체크인은 함께 지워지고, 카드 꾸미기도 지운다). 없어도 성공.
+  Future<void> deleteTrip(String tripId);
+
+  /// 체크인 하나를 지운다. 없어도 성공.
+  Future<void> deleteCheckIn(String tripId, String checkInId);
 }
 
 /// Supabase 테이블 `trips`, `check_ins` (supabase/migrations 참고).
@@ -17,7 +23,17 @@ class SupabaseTripCloud implements TripCloud {
   final SupabaseRest _rest;
 
   static const _select =
-      'id,city_id,city_name,province_name,start_date,planned,ended_at,check_ins(id,place_name,place_type,checked_in_at)';
+      'id,city_id,city_name,province_name,start_date,planned_days,planned,ended_at,check_ins(id,place_name,place_type,checked_in_at)';
+
+  @override
+  Future<void> deleteTrip(String tripId) async {
+    await _rest.delete('trips', {'id': 'eq.$tripId'});
+    await _rest.delete('card_decorations', {'page_key': 'like.$tripId:*'});
+  }
+
+  @override
+  Future<void> deleteCheckIn(String tripId, String checkInId) =>
+      _rest.delete('check_ins', {'trip_id': 'eq.$tripId', 'id': 'eq.$checkInId'});
 
   @override
   Future<List<Trip>> pull() async {
@@ -52,6 +68,7 @@ Map<String, Object?> tripToRow(Trip t, String userId) => {
       'start_date': formatDateOnly(t.startDate),
       'planned': [for (final p in t.planned) plannedToJson(p)],
       'ended_at': t.endedAt?.toUtc().toIso8601String(),
+      'planned_days': t.plannedDays,
     };
 
 Map<String, Object?> checkInToRow(String tripId, CheckIn c, String userId) => {
@@ -86,6 +103,7 @@ Trip? tripFromRow(Map<String, dynamic> row) {
     ],
     planned: plannedListFromJson(row['planned']),
     endedAt: row['ended_at'] is String ? DateTime.tryParse(row['ended_at'] as String)?.toLocal() : null,
+    plannedDays: plannedDaysFrom(row['planned_days']),
   );
 }
 

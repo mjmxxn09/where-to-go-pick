@@ -9,6 +9,7 @@ Trip sampleGangneungTrip() {
     cityName: '강릉시',
     provinceName: '강원특별자치도',
     startDate: DateTime(2026, 11, 13),
+    plannedDays: 3,
     checkIns: [
       CheckIn(id: 'gyeongpo', placeName: '경포해변', type: PlaceType.beach, at: t(0, 10, 20)),
       CheckIn(id: 'anmok', placeName: '안목 커피거리', type: PlaceType.cafe, at: t(0, 13, 40)),

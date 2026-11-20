@@ -6,13 +6,22 @@ import 'trip_models.dart';
 
 /// 폰에 남기는 여행 기록: 모든 여행과 지금 진행 중인 여행 id.
 class TripLog {
-  const TripLog({this.trips = const [], this.currentId});
+  const TripLog({this.trips = const [], this.currentId, this.deletedTrips = const {}, this.deletedCheckIns = const {}});
 
   final List<Trip> trips;
   final String? currentId;
 
+  /// 지웠지만 아직 서버에서 지우지 못한 여행 id. 서버 기록과 합칠 때 되살아나지 않게 한다.
+  final Set<String> deletedTrips;
+
+  /// 지웠지만 아직 서버에서 지우지 못한 체크인. [checkInKey] 형식.
+  final Set<String> deletedCheckIns;
+
   bool get isEmpty => trips.isEmpty;
 }
+
+/// 지운 체크인 기록용 키.
+String checkInKey(String tripId, String checkInId) => '$tripId|$checkInId';
 
 /// 예시 여행(서버 없이 화면을 채우는 강릉 여행 등)은 저장하거나 올리지 않는다.
 bool isSampleTrip(Trip trip) => trip.id.startsWith('sample-');
@@ -72,6 +81,7 @@ Map<String, Object?> tripToJson(Trip t) => {
       'checkIns': [for (final c in t.checkIns) checkInToJson(c)],
       'planned': [for (final p in t.planned) plannedToJson(p)],
       if (t.endedAt != null) 'endedAt': t.endedAt!.toUtc().toIso8601String(),
+      if (t.plannedDays != null) 'plannedDays': t.plannedDays,
     };
 
 Trip? tripFromJson(Object? json) {
@@ -94,13 +104,21 @@ Trip? tripFromJson(Object? json) {
     checkIns: [if (list is List<dynamic>) ...list.map(checkInFromJson).whereType<CheckIn>()],
     planned: plannedListFromJson(json['planned']),
     endedAt: json['endedAt'] is String ? DateTime.tryParse(json['endedAt'] as String)?.toLocal() : null,
+    plannedDays: plannedDaysFrom(json['plannedDays']),
   );
 }
+
+/// 1~30일만 받는다(그 밖은 정하지 않음).
+int? plannedDaysFrom(Object? v) => v is num && v >= 1 && v <= 30 ? v.toInt() : null;
 
 String encodeTripLog(TripLog log) => jsonEncode({
       'currentId': log.currentId,
       'trips': [for (final t in log.trips) tripToJson(t)],
+      if (log.deletedTrips.isNotEmpty) 'deletedTrips': log.deletedTrips.toList(),
+      if (log.deletedCheckIns.isNotEmpty) 'deletedCheckIns': log.deletedCheckIns.toList(),
     });
+
+Set<String> _stringSet(Object? v) => {if (v is List<dynamic>) ...v.whereType<String>()};
 
 TripLog decodeTripLog(String? raw) {
   if (raw == null || raw.isEmpty) return const TripLog();
@@ -110,7 +128,12 @@ TripLog decodeTripLog(String? raw) {
     final list = json['trips'];
     final trips = [if (list is List<dynamic>) ...list.map(tripFromJson).whereType<Trip>()];
     final current = json['currentId'];
-    return TripLog(trips: trips, currentId: current is String && trips.any((t) => t.id == current) ? current : null);
+    return TripLog(
+      trips: trips,
+      currentId: current is String && trips.any((t) => t.id == current) ? current : null,
+      deletedTrips: _stringSet(json['deletedTrips']),
+      deletedCheckIns: _stringSet(json['deletedCheckIns']),
+    );
   } on FormatException {
     return const TripLog();
   }
@@ -119,7 +142,13 @@ TripLog decodeTripLog(String? raw) {
 /// 두 기록을 합친다. 같은 여행은 체크인을 장소 id로 합치고, 둘 다 있으면 [primary] 쪽을 남긴다.
 /// 가볼 곳은 [primary] 쪽 목록을 그대로 쓴다(뺀 것이 다시 살아나지 않게).
 /// 결과는 시작일 최신순.
-List<Trip> mergeTrips(List<Trip> primary, List<Trip> other) {
+/// [deletedTrips]·[deletedCheckIns]에 든 것은 어느 쪽에 있어도 뺀다(지운 것이 서버에서 되살아나지 않게).
+List<Trip> mergeTrips(
+  List<Trip> primary,
+  List<Trip> other, {
+  Set<String> deletedTrips = const {},
+  Set<String> deletedCheckIns = const {},
+}) {
   final byId = <String, Trip>{for (final t in other) t.id: t};
   for (final t in primary) {
     final o = byId[t.id];
@@ -129,6 +158,20 @@ List<Trip> mergeTrips(List<Trip> primary, List<Trip> other) {
     }
     final checkIns = <String, CheckIn>{for (final c in o.checkIns) c.id: c, for (final c in t.checkIns) c.id: c};
     byId[t.id] = t.copyWith(checkIns: checkIns.values.toList());
+  }
+  for (final id in deletedTrips) {
+    byId.remove(id);
+  }
+  if (deletedCheckIns.isNotEmpty) {
+    for (final e in byId.entries.toList()) {
+      final t = e.value;
+      if (t.checkIns.any((c) => deletedCheckIns.contains(checkInKey(t.id, c.id)))) {
+        byId[e.key] = t.copyWith(checkIns: [
+          for (final c in t.checkIns)
+            if (!deletedCheckIns.contains(checkInKey(t.id, c.id))) c,
+        ]);
+      }
+    }
   }
   final merged = byId.values.toList()
     ..sort((a, b) {

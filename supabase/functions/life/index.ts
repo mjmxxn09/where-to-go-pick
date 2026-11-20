@@ -9,7 +9,7 @@
 import { isAppUser } from "./auth.ts";
 import { UpstreamError } from "./datago.ts";
 import { kst, loadForecast, summarize, toGrid } from "./kma.ts";
-import { centerOf, type Ldong, loadLdongs, loadPlaces, matchCity, searchPlaces } from "./tour.ts";
+import { type Ldong, loadCenter, loadLdongs, loadPlaces, matchCity, searchPlaces } from "./tour.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -61,10 +61,9 @@ Deno.serve(async (req) => {
       if (!query || query.length > 40) return fail(400, "BAD_REQUEST", "query(1~40자)가 필요해요.");
       return json(200, { places: brief(await searchPlaces(codes, query)) });
     }
-    const places = await loadPlaces(codes);
-    if (action === "places") return json(200, { places: brief(places) });
+    if (action === "places") return json(200, { places: brief(await loadPlaces(codes)) });
     if (action === "weather") {
-      const center = centerOf(places);
+      const center = await loadCenter(codes);
       if (!center) throw new UpstreamError("NO_COORDINATES", "날씨를 볼 위치를 찾지 못했어요.");
       const now = new Date();
       const today = kst(now).ymd;

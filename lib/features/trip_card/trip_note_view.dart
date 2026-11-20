@@ -90,7 +90,7 @@ class TripNoteView extends StatelessWidget {
       final suffix = trip.days.length == 1 ? ' · 당일 여행' : '';
       return '${_ymd(d)} (${_weekdays[d.weekday - 1]})$suffix';
     }
-    return '${_ymd(page.days.first.date)} – ${_md(page.days.last.date)} · ${trip.lengthLabel}';
+    return '${_ymd(page.days.first.date)} – ${_md(page.days.last.date)} · ${lengthLabelOf(trip.dayCount)}';
   }
 }
 

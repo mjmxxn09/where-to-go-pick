@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../../app/app_scope.dart';
@@ -8,7 +10,9 @@ import '../votes/pickle_ask_bubble.dart';
 import '../shared/weather_icon.dart';
 import '../trip_card/trip_card_screen.dart';
 import 'place_filter.dart';
+import 'check_in_edit_sheet.dart';
 import 'trip_controller.dart';
+import 'trip_dates_sheet.dart';
 import 'trip_models.dart';
 
 /// 3 · 여행 중: 그날 날씨, 가볼 곳(☆로 담은 곳), 명소·맛집 추천과 이름 검색, 버튼 한 번 체크인, 시간순 기록.
@@ -22,8 +26,12 @@ class TripScreen extends StatefulWidget {
 class _TripScreenState extends State<TripScreen> {
   PlaceFilter _filter = PlaceFilter.all;
   String? _loadedCity;
+  String? _weatherKey;
   Future<List<PlaceSuggestion>>? _places;
   Future<DayWeather>? _weather;
+
+  /// 날씨를 아직 보여 줄 수 없을 때 한 줄(출발이 3일보다 더 남았을 때).
+  String? _weatherNote;
 
   /// 다녀온 곳에 준 "나도 한 표".
   Set<String> _myVotes = {};
@@ -60,11 +68,24 @@ class _TripScreenState extends State<TripScreen> {
   }
 
   void _ensureLoaded(Trip trip) {
-    if (_loadedCity == trip.cityId) return;
     final scope = AppScope.of(context);
+    // 날씨: 출발 전이면 출발일(단기예보는 3일 앞까지), 여행 중이면 오늘.
+    final now = DateTime.now();
+    final until = daysBetween(now, trip.startDate);
+    final weatherKey = '${trip.cityId}|${until > 0 ? dateOnly(trip.startDate) : dateOnly(now)}';
+    if (_weatherKey != weatherKey) {
+      _weatherKey = weatherKey;
+      if (until > 2) {
+        _weather = null;
+        _weatherNote = '출발 3일 전부터 ${monthDayLabel(trip.startDate)} 날씨가 보여요.';
+      } else {
+        _weatherNote = null;
+        _weather = scope.life.weather(cityId: trip.cityId, date: until > 0 ? trip.startDate : now);
+      }
+    }
+    if (_loadedCity == trip.cityId) return;
     _loadedCity = trip.cityId;
     _places = scope.pickle.myInterestKeys().then((keys) => scope.life.places(cityId: trip.cityId, interestKeys: keys));
-    _weather = scope.life.weather(cityId: trip.cityId, date: DateTime.now());
     _myVotes = {};
     _query = '';
     _results = null;
@@ -77,6 +98,19 @@ class _TripScreenState extends State<TripScreen> {
 
   void _checkIn(TripController controller, PlaceSuggestion place) {
     controller.checkIn(place);
+    // 잘못 눌렀을 때 바로 되돌릴 수 있게.
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(
+        content: Text('${place.name} 체크인!'),
+        action: SnackBarAction(
+          label: '취소',
+          onPressed: () {
+            controller.removeCheckIn(place.id);
+            if (mounted && _ask?.just.id == place.id) setState(() => _ask = null);
+          },
+        ),
+      ));
     final checkIns = controller.trip?.checkIns ?? const <CheckIn>[];
     final just = checkIns.where((c) => c.id == place.id).firstOrNull;
     final before = just == null ? const <CheckIn>[] : checkIns.where((c) => c.id != place.id && !c.at.isAfter(just.at));
@@ -175,20 +209,74 @@ class _TripScreenState extends State<TripScreen> {
         done: controller.isCheckedIn(p.id),
         planned: controller.isPlanned(p.id),
         voted: _myVotes.contains(p.id),
-        onCheckIn: () => _checkIn(controller, p),
+        // 출발 전에는 체크인을 막는다(가볼 곳 담기는 된다).
+        onCheckIn: trip.isBeforeStart(DateTime.now()) ? null : () => _checkIn(controller, p),
         onTogglePlan: () => controller.togglePlanned(p),
         onVote: () => _togglePlaceVote(trip.cityId, p.id),
       );
 
+  Future<void> _editDates(TripController controller, Trip trip) async {
+    final dates = await showTripDatesSheet(
+      context,
+      title: '여행 기간 바꾸기',
+      confirmLabel: '바꾸기',
+      initialStart: trip.startDate,
+      initialDays: trip.plannedDays,
+    );
+    if (dates == null || !mounted) return;
+    controller.updateDates(startDate: dates.start, plannedDays: dates.days);
+  }
+
+  Future<void> _editCheckIn(TripController controller, Trip trip, CheckIn checkIn) async {
+    final edit = await showCheckInEditSheet(context, trip: trip, checkIn: checkIn);
+    if (edit == null || !mounted) return;
+    final at = edit.at;
+    if (at != null) {
+      controller.updateCheckIn(checkIn.id, at);
+      return;
+    }
+    final removed = controller.removeCheckIn(checkIn.id);
+    if (removed == null) return;
+    if (_ask?.just.id == removed.id || _ask?.other.id == removed.id) setState(() => _ask = null);
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(
+        content: Text('${removed.placeName} 체크인을 지웠어요.'),
+        action: SnackBarAction(label: '되돌리기', onPressed: () => controller.restoreCheckIn(removed)),
+      ));
+  }
+
   Widget _list(BuildContext context, TripController controller, Trip trip) {
+    final now = DateTime.now();
+    final beforeStart = trip.isBeforeStart(now);
     return ListView(
       padding: const EdgeInsets.all(Gap.m),
       children: [
-        Text(trip.title, style: titleStyle(26)),
-        Text('${trip.provinceName} · ${trip.lengthLabel}',
-            style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+        Row(
+          children: [
+            Expanded(child: Text(trip.title, style: titleStyle(26))),
+            IconButton(
+              tooltip: '여행 기간 바꾸기',
+              onPressed: () => _editDates(controller, trip),
+              icon: const Icon(Icons.edit_calendar_outlined),
+            ),
+          ],
+        ),
+        Text(
+          '${trip.provinceName} · ${dateRangeLabel(trip.startDate, trip.lastDate)} · ${trip.lengthLabel}',
+          style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+        ),
+        const SizedBox(height: Gap.s),
+        _DayStrip(trip: trip, now: now),
+        if (beforeStart) ...[
+          const SizedBox(height: Gap.s),
+          _Notice(
+            icon: Icons.flight_takeoff,
+            text: '출발 ${trip.statusOn(now)} · 가볼 곳을 미리 담아 둬요. 체크인은 ${monthDayLabel(trip.startDate)}부터 할 수 있어요.',
+          ),
+        ],
         const SizedBox(height: Gap.s + 4),
-        _WeatherCard(future: _weather),
+        _WeatherCard(future: _weather, note: _weatherNote),
         const SizedBox(height: Gap.s + 4),
         _RouteToggle(controller: controller),
         const SizedBox(height: Gap.s + 4),
@@ -285,7 +373,7 @@ class _TripScreenState extends State<TripScreen> {
           ),
         ],
         const SizedBox(height: Gap.m),
-        _Timeline(trip: trip),
+        _Timeline(trip: trip, onTap: (c) => _editCheckIn(controller, trip, c)),
         const SizedBox(height: Gap.m),
         // 여행 중에도 카드를 미리 볼 수 있다. 여행을 끝내는 건 아래 "여행 마치기"뿐.
         OutlinedButton.icon(
@@ -313,9 +401,12 @@ extension on Set<String> {
 }
 
 class _WeatherCard extends StatelessWidget {
-  const _WeatherCard({required this.future});
+  const _WeatherCard({required this.future, this.note});
 
   final Future<DayWeather>? future;
+
+  /// 날씨 대신 보여 줄 한 줄(예: 출발이 많이 남았을 때).
+  final String? note;
 
   @override
   Widget build(BuildContext context) {
@@ -330,9 +421,11 @@ class _WeatherCard extends StatelessWidget {
               ? SizedBox(
                   height: 56,
                   child: Center(
-                    child: snap.hasError
-                        ? const Text('날씨를 불러오지 못했어요.', style: TextStyle(color: AppColors.textSecondary))
-                        : const CircularProgressIndicator(),
+                    child: note != null
+                        ? Text(note!, textAlign: TextAlign.center, style: const TextStyle(color: AppColors.textSecondary))
+                        : snap.hasError
+                            ? const Text('날씨를 불러오지 못했어요.', style: TextStyle(color: AppColors.textSecondary))
+                            : const CircularProgressIndicator(),
                   ),
                 )
               : Row(
@@ -445,7 +538,7 @@ class _PlaceTile extends StatelessWidget {
   final bool done;
   final bool planned;
   final bool voted;
-  final VoidCallback onCheckIn;
+  final VoidCallback? onCheckIn;
   final VoidCallback onTogglePlan;
   final VoidCallback onVote;
 
@@ -560,9 +653,12 @@ class _VoteChip extends StatelessWidget {
 }
 
 class _Timeline extends StatelessWidget {
-  const _Timeline({required this.trip});
+  const _Timeline({required this.trip, required this.onTap});
 
   final Trip trip;
+
+  /// 기록을 누르면 날·시각 바꾸기, 지우기.
+  final ValueChanged<CheckIn> onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -573,18 +669,96 @@ class _Timeline extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('체크인 기록 (시간순)', style: TextStyle(fontWeight: FontWeight.w700)),
+        const Text('체크인 기록 (시간순 · 눌러서 고치기)', style: TextStyle(fontWeight: FontWeight.w700)),
         const SizedBox(height: Gap.s),
         for (final day in trip.days) ...[
           Text(day.label, style: const TextStyle(fontFamily: AppFonts.title, color: AppColors.primaryDeep)),
           for (final c in day.checkIns)
-            Padding(
-              padding: const EdgeInsets.only(left: Gap.s, top: 2, bottom: 2),
-              child: Text('${hm(c.at)}  ${c.placeName}  · ${c.type.label}'),
+            InkWell(
+              onTap: () => onTap(c),
+              borderRadius: BorderRadius.circular(8),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(Gap.s, 6, Gap.xs, 6),
+                child: Row(
+                  children: [
+                    Expanded(child: Text('${hm(c.at)}  ${c.placeName}  · ${c.type.label}')),
+                    const Icon(Icons.edit_outlined, size: 16, color: AppColors.muted),
+                  ],
+                ),
+              ),
             ),
           const SizedBox(height: Gap.xs),
         ],
       ],
+    );
+  }
+}
+
+/// 여행 날짜 줄: "1일차 11/20 · 체크인 3", 오늘은 진하게. 기간을 정하지 않았으면 오늘까지.
+class _DayStrip extends StatelessWidget {
+  const _DayStrip({required this.trip, required this.now});
+
+  final Trip trip;
+  final DateTime now;
+
+  @override
+  Widget build(BuildContext context) {
+    final today = trip.dayIndexOf(now);
+    // 기간을 정했으면 그 기간(체크인이 더 길면 그만큼), 안 정했으면 오늘까지.
+    final count = math.min(30, trip.plannedDays == null ? math.max(trip.totalDays, today + 1) : trip.totalDays);
+    final byDay = {for (final d in trip.days) d.index: d.checkIns.length};
+    final start = dateOnly(trip.startDate);
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          for (var i = 0; i < count; i++)
+            Container(
+              margin: const EdgeInsets.only(right: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: i == today ? AppColors.primary : AppColors.surface,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: i == today ? AppColors.primary : AppColors.primaryContainer),
+              ),
+              child: Text(
+                '${i + 1}일차 ${start.add(Duration(days: i)).month}/${start.add(Duration(days: i)).day}'
+                '${(byDay[i] ?? 0) > 0 ? ' · ${byDay[i]}곳' : ''}',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: i == today ? Colors.white : AppColors.primaryDeep,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 아이콘 + 한두 줄 안내(출발 전 등).
+class _Notice extends StatelessWidget {
+  const _Notice({required this.icon, required this.text});
+
+  final IconData icon;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(color: AppColors.primaryContainer, borderRadius: BorderRadius.circular(16)),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 20, color: AppColors.primaryDeep),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(text, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.primaryDeep)),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -55,6 +55,23 @@ class _MyMapScreenState extends State<MyMapScreen> {
     Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => TripCardScreen(trip: trip)));
   }
 
+  Future<void> _delete(TripController controller, Trip trip) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('${trip.title}을 지울까요?'),
+        content: Text('체크인 ${trip.checkIns.length}곳, 가볼 곳, 카드 꾸미기가 모두 지워져요. 되돌릴 수 없어요.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('그대로 두기')),
+          FilledButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('지우기')),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    controller.deleteTrip(trip.id);
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${trip.title}을 지웠어요.')));
+  }
+
   void _resume(TripController controller, Trip trip) {
     final current = controller.trip;
     controller.resumeTrip(trip.id);
@@ -147,12 +164,12 @@ class _MyMapScreenState extends State<MyMapScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          '● 지금 여행 중',
-                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: AppColors.secondary),
+                        Text(
+                          trip.isBeforeStart(DateTime.now()) ? '● 다가오는 여행' : '● 지금 여행 중',
+                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: AppColors.secondary),
                         ),
                         Text(
-                          '${trip.title} · ${trip.dayCount}일차',
+                          '${trip.title} · ${trip.statusOn(DateTime.now())}',
                           style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
                         ),
                       ],
@@ -177,6 +194,7 @@ class _MyMapScreenState extends State<MyMapScreen> {
                 trip: t,
                 onOpen: () => _openCard(t),
                 onResume: () => _resume(scope.trip, t),
+                onDelete: () => _delete(scope.trip, t),
               ),
             ),
         ],
@@ -275,15 +293,15 @@ class _MapError extends StatelessWidget {
 
 /// 지난 여행 한 줄: 누르면 카드, 오른쪽 메뉴에서 다시 이어가기.
 class _PastTripTile extends StatelessWidget {
-  const _PastTripTile({required this.trip, required this.onOpen, required this.onResume});
+  const _PastTripTile({required this.trip, required this.onOpen, required this.onResume, required this.onDelete});
 
   final Trip trip;
   final VoidCallback onOpen;
   final VoidCallback onResume;
+  final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
-    final d = trip.startDate;
     return AppCard(
       onTap: onOpen,
       padding: const EdgeInsets.fromLTRB(10, 8, 4, 8),
@@ -302,7 +320,9 @@ class _PastTripTile extends StatelessWidget {
               children: [
                 Text(trip.title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
                 Text(
-                  '${d.year}.${d.month}.${d.day} · ${trip.lengthLabel} · 체크인 ${trip.checkIns.length}곳',
+                  '${trip.startDate.year}. ${dateRangeLabel(trip.startDate, trip.lastDate)} · ${trip.lengthLabel} · 체크인 ${trip.checkIns.length}곳',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
                 ),
               ],
@@ -310,8 +330,11 @@ class _PastTripTile extends StatelessWidget {
           ),
           PopupMenuButton<String>(
             tooltip: '더 보기',
-            onSelected: (_) => onResume(),
-            itemBuilder: (context) => const [PopupMenuItem(value: 'resume', child: Text('다시 이어가기'))],
+            onSelected: (v) => v == 'delete' ? onDelete() : onResume(),
+            itemBuilder: (context) => const [
+              PopupMenuItem(value: 'resume', child: Text('다시 이어가기')),
+              PopupMenuItem(value: 'delete', child: Text('지우기')),
+            ],
           ),
         ],
       ),

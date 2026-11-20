@@ -56,6 +56,16 @@ class SupabaseRest {
         ));
   }
 
+  /// [filters](PostgREST 그대로, 예: `{'id': 'eq.t1'}`)에 맞는 행을 지운다. RLS로 내 행만 지워진다.
+  /// 조건 없이 부르면 거절한다(실수로 전부 지우지 않게).
+  Future<void> delete(String table, Map<String, String> filters) async {
+    if (filters.isEmpty) throw ArgumentError.value(filters, 'filters', '지울 조건이 없어요');
+    await _send((auth) => _http.delete(
+          session.endpoint('/rest/v1/$table', filters),
+          headers: {..._headers(auth), 'Prefer': 'return=minimal'},
+        ));
+  }
+
   /// Edge Function을 부른다(POST JSON). 응답 JSON 객체를 돌려준다.
   Future<Map<String, dynamic>> invoke(String function, Map<String, Object?> body) async {
     final res = await _send((auth) => _http.post(

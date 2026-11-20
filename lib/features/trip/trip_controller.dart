@@ -26,6 +26,10 @@ class TripController extends ChangeNotifier {
   final TripCloud? _cloud;
   bool _recordingRoute = false;
   bool _needsPush = false;
+
+  /// 지웠지만 아직 서버에서 지우지 못한 것(폰에도 저장). 서버 기록과 합칠 때 되살아나지 않게 한다.
+  Set<String> _deletedTrips = {};
+  Set<String> _deletedCheckIns = {};
   Future<void>? _syncing;
   bool _disposed = false;
 
@@ -54,9 +58,11 @@ class TripController extends ChangeNotifier {
       try {
         final log = await store.load();
         if (_disposed) return;
+        _deletedTrips = {..._deletedTrips, ...log.deletedTrips};
+        _deletedCheckIns = {..._deletedCheckIns, ...log.deletedCheckIns};
         if (!log.isEmpty) {
           // 불러오는 사이에 이미 시작한 여행이 있으면 그쪽을 남긴다.
-          _trips = mergeTrips(_trips, log.trips);
+          _trips = mergeTrips(_trips, log.trips, deletedTrips: _deletedTrips, deletedCheckIns: _deletedCheckIns);
           final current = _trip;
           if (current == null || isSampleTrip(current)) {
             final saved = _find(log.currentId);
@@ -83,7 +89,8 @@ class TripController extends ChangeNotifier {
     try {
       final remote = await cloud.pull();
       if (_disposed) return;
-      final merged = mergeTrips(_trips, remote);
+      await _flushDeletes(cloud);
+      final merged = mergeTrips(_trips, remote, deletedTrips: _deletedTrips, deletedCheckIns: _deletedCheckIns);
       final changed = !_sameTrips(merged, _trips);
       _trips = merged;
       final current = _trip;
@@ -104,7 +111,14 @@ class TripController extends ChangeNotifier {
   }
 
   /// 새 여행을 시작한다. 진행 중이던 여행이 있으면 지금 시각으로 마친다.
-  void startTrip({required String cityId, required String cityName, required String provinceName}) {
+  /// [startDate]는 출발일(없으면 오늘), [plannedDays]는 정한 기간(일 수, 없으면 정하지 않음).
+  void startTrip({
+    required String cityId,
+    required String cityName,
+    required String provinceName,
+    DateTime? startDate,
+    int? plannedDays,
+  }) {
     final now = _clock();
     final previous = _trip;
     if (previous != null && !isSampleTrip(previous) && !previous.isEnded) {
@@ -117,12 +131,65 @@ class TripController extends ChangeNotifier {
       cityId: cityId,
       cityName: cityName,
       provinceName: provinceName,
-      startDate: DateTime(now.year, now.month, now.day),
+      startDate: dateOnly(startDate ?? now),
+      plannedDays: plannedDays,
     );
     _trip = trip;
     _trips = mergeTrips([trip], _trips);
     notifyListeners();
     _changed(trip);
+  }
+
+  /// 지금 여행의 출발일·기간을 바꾼다.
+  void updateDates({required DateTime startDate, int? plannedDays}) {
+    final current = _trip;
+    if (current == null) return;
+    _replaceCurrent(current.copyWith(startDate: startDate, setPlannedDays: true, plannedDays: plannedDays));
+  }
+
+  /// 체크인 시각을 바꾼다(깜빡한 체크인을 어제로, 순서 바로잡기). 목록은 다시 시간순으로.
+  void updateCheckIn(String checkInId, DateTime at) {
+    final current = _trip;
+    if (current == null) return;
+    _replaceCurrent(current.copyWith(checkIns: [
+      for (final c in current.checkIns)
+        c.id == checkInId ? CheckIn(id: c.id, placeName: c.placeName, type: c.type, at: at) : c,
+    ]));
+  }
+
+  /// 체크인을 지운다(잘못 누른 체크인, 체크인 직후 "취소"). 지운 체크인을 돌려준다(되돌리기용).
+  CheckIn? removeCheckIn(String checkInId) {
+    final current = _trip;
+    if (current == null) return null;
+    final removed = current.checkIns.where((c) => c.id == checkInId).firstOrNull;
+    if (removed == null) return null;
+    if (!isSampleTrip(current)) _deletedCheckIns = {..._deletedCheckIns, checkInKey(current.id, checkInId)};
+    _replaceCurrent(current.copyWith(checkIns: [
+      for (final c in current.checkIns)
+        if (c.id != checkInId) c,
+    ]));
+    _flushSoon();
+    return removed;
+  }
+
+  /// 지운 체크인을 되돌린다.
+  void restoreCheckIn(CheckIn checkIn) {
+    final current = _trip;
+    if (current == null || isCheckedIn(checkIn.id)) return;
+    _deletedCheckIns = {..._deletedCheckIns}..remove(checkInKey(current.id, checkIn.id));
+    _replaceCurrent(current.copyWith(checkIns: [...current.checkIns, checkIn]));
+  }
+
+  /// 여행을 통째로 지운다(체크인·가볼 곳·카드 꾸미기 포함). 지금 여행이면 여행 중 화면이 빈다.
+  void deleteTrip(String tripId) {
+    final target = _find(tripId);
+    if (target == null) return;
+    _trips = [for (final t in _trips) if (t.id != tripId) t];
+    if (_trip?.id == tripId) _trip = null;
+    if (!isSampleTrip(target)) _deletedTrips = {..._deletedTrips, tripId};
+    notifyListeners();
+    unawaited(_save());
+    _flushSoon();
   }
 
   bool isCheckedIn(String placeId) => _trip?.checkIns.any((c) => c.id == placeId) ?? false;
@@ -214,6 +281,39 @@ class TripController extends ChangeNotifier {
     }));
   }
 
+  void _flushSoon() {
+    final cloud = _cloud;
+    if (cloud == null) return;
+    unawaited(_flushDeletes(cloud).then((_) => _save()));
+  }
+
+  /// 지운 것을 서버에서도 지운다. 성공한 것만 목록에서 뺀다(실패하면 다음 sync 때 다시).
+  Future<void> _flushDeletes(TripCloud cloud) async {
+    for (final id in _deletedTrips.toList()) {
+      try {
+        await cloud.deleteTrip(id);
+        _deletedTrips = {..._deletedTrips}..remove(id);
+      } on Object catch (e) {
+        debugPrint('여행을 서버에서 지우지 못했어요(다음에 다시): $e');
+        return;
+      }
+    }
+    for (final key in _deletedCheckIns.toList()) {
+      final sep = key.indexOf('|');
+      if (sep < 0) {
+        _deletedCheckIns = {..._deletedCheckIns}..remove(key);
+        continue;
+      }
+      try {
+        await cloud.deleteCheckIn(key.substring(0, sep), key.substring(sep + 1));
+        _deletedCheckIns = {..._deletedCheckIns}..remove(key);
+      } on Object catch (e) {
+        debugPrint('체크인을 서버에서 지우지 못했어요(다음에 다시): $e');
+        return;
+      }
+    }
+  }
+
   Future<void> _save() async {
     final store = _store;
     if (store == null) return;
@@ -222,6 +322,8 @@ class TripController extends ChangeNotifier {
       await store.save(TripLog(
         trips: _trips,
         currentId: current == null || isSampleTrip(current) ? null : current.id,
+        deletedTrips: _deletedTrips,
+        deletedCheckIns: _deletedCheckIns,
       ));
     } on Object catch (e) {
       debugPrint('여행 기록을 폰에 저장하지 못했어요: $e');
@@ -235,7 +337,9 @@ bool _sameTrips(List<Trip> a, List<Trip> b) {
     if (a[i].id != b[i].id ||
         a[i].checkIns.length != b[i].checkIns.length ||
         a[i].planned.length != b[i].planned.length ||
-        a[i].endedAt != b[i].endedAt) {
+        a[i].endedAt != b[i].endedAt ||
+        a[i].plannedDays != b[i].plannedDays ||
+        a[i].startDate != b[i].startDate) {
       return false;
     }
   }

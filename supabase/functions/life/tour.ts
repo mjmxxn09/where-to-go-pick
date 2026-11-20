@@ -248,6 +248,28 @@ export function searchPlaces(codes: Ldong[], query: string): Promise<Place[]> {
   });
 }
 
+const centerCache = new TtlCache<{ lat: number; lng: number } | null>(24 * 60 * 60 * 1000);
+
+/**
+ * 날씨용 도시 가운데 좌표. 장소 목록이 이미 캐시에 있으면 그걸 쓰고, 아니면 관광지 20곳만 한 번 물어본다
+ * (여행지 고르기 화면의 도시 카드마다 날씨를 부르므로, 장소 다섯 종류를 다 받지 않게).
+ */
+export function loadCenter(codes: Ldong[]): Promise<{ lat: number; lng: number } | null> {
+  const c = codes[0];
+  return centerCache.get(`${c.regnCd}-${c.signguCd}`, async () => {
+    const json = await getJson(`${BASE}/areaBasedList2`, {
+      ...COMMON,
+      numOfRows: 20,
+      pageNo: 1,
+      arrange: "C",
+      contentTypeId: "12",
+      lDongRegnCd: c.regnCd,
+      lDongSignguCd: c.signguCd,
+    });
+    return centerOf(toPlaces(itemsOf(json, OK), { skipLodging: true }));
+  });
+}
+
 /** 장소 좌표의 가운데(중앙값). 날씨 격자를 고를 때 쓴다. */
 export function centerOf(places: Place[]): { lat: number; lng: number } | null {
   const lats = places.map((p) => p.lat).filter((v): v is number => v != null).sort((a, b) => a - b);

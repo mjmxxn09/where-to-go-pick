@@ -8,6 +8,7 @@ import '../../core/votes/vote_repository.dart';
 import '../korea_map/korea_map_data.dart';
 import '../korea_map/korea_map_view.dart';
 import '../shared/weather_icon.dart';
+import '../trip/trip_dates_sheet.dart';
 import '../votes/poll_screen.dart';
 import 'trip_candidates.dart';
 
@@ -114,15 +115,34 @@ class _ExploreScreenState extends State<ExploreScreen> {
     _openPoll(votes.poll(asked.id).then((p) => p ?? (throw StateError('없는 투표'))), asked.cities);
   }
 
-  void _startTrip() {
+  /// 출발일·기간을 고르고 여행을 만든다. 진행 중인 여행이 있으면 마쳐진다고 미리 알린다.
+  Future<void> _startTrip() async {
     final city = _city;
     if (city == null) return;
-    AppScope.of(context).trip.startTrip(cityId: city.id, cityName: city.name, provinceName: city.provinceName);
+    final trips = AppScope.of(context).trip;
+    final current = trips.trip;
+    final title = '${city.name.replaceAll(RegExp(r'(시|군|구)$'), '')} 여행 만들기';
+    final dates = await showTripDatesSheet(
+      context,
+      title: title,
+      confirmLabel: '여행 만들기',
+      warning: current != null && !current.isEnded && !current.id.startsWith('sample-')
+          ? '진행 중인 ${current.title}은 마쳐져요. 내 지도의 지난 여행에서 다시 이어갈 수 있어요.'
+          : null,
+    );
+    if (dates == null || !mounted) return;
+    trips.startTrip(
+      cityId: city.id,
+      cityName: city.name,
+      provinceName: city.provinceName,
+      startDate: dates.start,
+      plannedDays: dates.days,
+    );
     // 후보 중 한 곳으로 떠나면 고민이 끝난 것 → 후보를 비운다(물어본 투표는 남는다).
     final store = _cands;
     final removed = store != null && store.contains(city.id) ? store.clear() : const <SelectedCity>[];
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(removed.isEmpty ? '${city.name} 여행을 시작했어요!' : '${city.name} 여행을 시작했어요! 갈까 말까 후보는 비웠어요'),
+      content: Text(removed.isEmpty ? '${city.name} 여행을 만들었어요!' : '${city.name} 여행을 만들었어요! 갈까 말까 후보는 비웠어요'),
       action: removed.isEmpty || store == null
           ? null
           : SnackBarAction(label: '되돌리기', onPressed: () => store.restore(removed)),

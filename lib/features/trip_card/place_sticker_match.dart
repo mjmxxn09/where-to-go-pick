@@ -47,6 +47,10 @@ const placeNameKeywords = <(List<String>, String)>[
       'place_nature_mountain'),
   (['수목원', '식물원', '휴양림', '숲', '산림', '비자림', '제림'], 'place_nature_forest'),
   (['공원', '정원', '들판', '초원', '목장', '억새', '평원', '꽃밭', '매화', '매실', '파크'], 'place_nature_meadow'),
+  // 강: '강' 한 글자로는 강릉·강원·강화가 걸려 강 이름·강변 말만 본다. 이름이 …강으로 끝나면 아래 규칙으로.
+  // 들판보다 뒤: "태화강 국가정원"은 정원, "여의도한강공원"은 공원이 흔한 말이라 강.
+  (['한강', '북한강', '남한강', '낙동강', '금강', '섬진강', '영산강', '태화강', '임진강', '강변', '강가', '강둑', '물길', '하천', '천변'],
+      'place_nature_river'),
   // 해변
   (['워터파크', '튜브'], 'place_beach_tube'),
   (['해수욕장', '해변', '비치', '해안', 'SUP', '서핑'], 'place_beach_parasol'),
@@ -105,6 +109,10 @@ String? stickerForPlace(CheckIn place, {required bool Function(String name) has,
   if (matched != null) return matched;
   if (place.type == PlaceType.heritage && name.endsWith('사') && has('place_heritage_pagoda')) {
     return 'place_heritage_pagoda';
+  }
+  // 강 이름(…강)은 강 — 자연·기타로 저장된 곳만
+  if ((place.type == PlaceType.nature || place.type == PlaceType.other) && name.endsWith('강') && has('place_nature_river')) {
+    return 'place_nature_river';
   }
   // 산 이름(…산, …봉)은 산 — 자연·기타로 저장된 곳만("부산"처럼 지명에 '산'이 든 맛집이 산이 되지 않게)
   if ((place.type == PlaceType.nature || place.type == PlaceType.other) &&

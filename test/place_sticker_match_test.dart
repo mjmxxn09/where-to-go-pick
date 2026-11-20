@@ -35,6 +35,12 @@ void main() {
     expect(pick('예산 예당호 출렁다리', PlaceType.nature), 'place_nature_bridge');
     expect(pick('울산 대왕암공원', PlaceType.nature), 'place_beach_lighthouse');
     expect(pick('경주 첨성대', PlaceType.heritage), 'place_heritage_tomb');
+    expect(pick('서울 여의도한강공원', PlaceType.nature), 'place_nature_river');
+    expect(pick('북한강', PlaceType.nature), 'place_nature_river');
+    expect(pick('동강', PlaceType.nature), 'place_nature_river');
+    expect(pick('태화강 국가정원', PlaceType.nature), 'place_nature_meadow');
+    expect(pick('곡성 섬진강기차마을', PlaceType.leisure), 'place_leisure_cablecar');
+    expect(pick('강릉 경포해변', PlaceType.beach), 'place_beach_parasol');
     expect(pick('정동진', PlaceType.beach, used: {'place_beach_parasol', 'place_beach_island', 'place_beach_tube'}),
         'place_beach_lighthouse');
   });

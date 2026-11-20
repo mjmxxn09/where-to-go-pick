@@ -17,17 +17,16 @@ void main() {
     expect(pick('솔향수목원', PlaceType.nature), 'place_nature_forest');
     expect(pick('담양 죽녹원', PlaceType.nature), 'place_nature_bamboo');
     expect(pick('남한산성', PlaceType.heritage), 'place_heritage_fortress');
-    expect(pick('불국사', PlaceType.heritage), 'place_heritage_pagoda');
+    expect(pick('양산 통도사', PlaceType.heritage), 'place_heritage_pagoda');
   });
 
   test('한국관광 100선으로 더한 스티커', () {
-    expect(pick('남산서울타워', PlaceType.leisure), 'place_leisure_tower');
     expect(pick('롯데월드타워 서울스카이', PlaceType.leisure), 'place_leisure_tower');
     expect(pick('에버랜드', PlaceType.leisure), 'place_leisure_themepark');
     expect(pick('목포 해상케이블카', PlaceType.leisure), 'place_leisure_cablecar');
     expect(pick('제천 청풍호반케이블카', PlaceType.nature), 'place_leisure_cablecar');
     expect(pick('국립중앙박물관', PlaceType.culture), 'place_culture_museum');
-    expect(pick('부산 감천문화마을', PlaceType.culture), 'place_culture_street');
+    expect(pick('파주 헤이리 예술마을', PlaceType.culture), 'place_culture_street');
     expect(pick('속초 설악산 국립공원', PlaceType.nature), 'place_nature_mountain');
     expect(pick('무등산', PlaceType.nature), 'place_nature_mountain');
     expect(pick('부산 돼지국밥', PlaceType.food), 'place_food_stew');
@@ -43,6 +42,26 @@ void main() {
     expect(pick('강릉 경포해변', PlaceType.beach), 'place_beach_parasol');
     expect(pick('정동진', PlaceType.beach, used: {'place_beach_parasol', 'place_beach_island', 'place_beach_tube'}),
         'place_beach_lighthouse');
+  });
+
+  test('명소 이름이면 명소 전용 스티커가 먼저', () {
+    expect(pick('남산서울타워', PlaceType.leisure), 'landmark_namsan_tower');
+    expect(pick('경복궁', PlaceType.heritage), 'landmark_gwanghwamun');
+    expect(pick('수원화성 관광특구', PlaceType.heritage), 'landmark_suwon_hwaseong');
+    expect(pick('경주 동궁과 월지', PlaceType.heritage), 'landmark_donggung_wolji');
+    expect(pick('불국사', PlaceType.heritage), 'landmark_dabotap');
+    expect(pick('성산일출봉', PlaceType.nature), 'landmark_seongsan');
+    expect(pick('울릉 독도', PlaceType.beach), 'landmark_dokdo');
+    expect(pick('부산 광안리해수욕장', PlaceType.beach), 'landmark_gwangan_bridge');
+    expect(pick('부산 해동 용궁사', PlaceType.heritage), 'landmark_haedong_yonggungsa');
+    expect(pick('부산 감천문화마을', PlaceType.culture), 'landmark_gamcheon');
+    expect(pick('안동 하회마을', PlaceType.heritage), 'landmark_hahoe_mask');
+    expect(pick('춘천 남이섬', PlaceType.nature), 'landmark_namiseom');
+    expect(pick('순천만습지', PlaceType.nature), 'landmark_suncheonman');
+    expect(pick('단양 도담삼봉', PlaceType.nature), 'landmark_dodamsambong');
+    expect(pick('평창 대관령 관광특구', PlaceType.nature), 'landmark_daegwallyeong');
+    // 그림이 없으면 원래 규칙으로
+    expect(pick('남산서울타워', PlaceType.leisure, has: (n) => !n.startsWith('landmark_')), 'place_leisure_tower');
   });
 
   test('종류가 달라도 이름이 더 정확하면 이름을 따른다', () {

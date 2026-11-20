@@ -62,6 +62,25 @@ const placeNameKeywords = <(List<String>, String)>[
   (['한옥', '고택', '향교', '서원', '종택', '궁', '민속촌', '하회마을', '서촌'], 'place_heritage_hanok'),
 ];
 
+/// 명소 전용 스티커. 이름에 이 말이 있으면 다른 무엇보다 먼저 쓴다(같은 카드에 이미 붙였어도).
+const landmarkKeywords = <(List<String>, String)>[
+  (['남산서울타워', '남산타워', 'N서울타워', 'N타워'], 'landmark_namsan_tower'),
+  (['경복궁', '광화문'], 'landmark_gwanghwamun'),
+  (['수원화성', '화성행궁', '팔달문', '장안문', '화서문', '방화수류정'], 'landmark_suwon_hwaseong'),
+  (['동궁과월지', '동궁과 월지', '안압지'], 'landmark_donggung_wolji'),
+  (['불국사', '다보탑', '석가탑'], 'landmark_dabotap'),
+  (['성산일출봉'], 'landmark_seongsan'),
+  (['독도'], 'landmark_dokdo'),
+  (['광안대교', '광안리'], 'landmark_gwangan_bridge'),
+  (['해동용궁사', '해동 용궁사'], 'landmark_haedong_yonggungsa'),
+  (['감천문화마을'], 'landmark_gamcheon'),
+  (['하회마을', '하회탈', '하회'], 'landmark_hahoe_mask'),
+  (['남이섬'], 'landmark_namiseom'),
+  (['순천만'], 'landmark_suncheonman'),
+  (['도담삼봉'], 'landmark_dodamsambong'),
+  (['대관령', '양떼목장'], 'landmark_daegwallyeong'),
+];
+
 /// 이름에 흔히 붙는 말. 다른 또렷한 말이 없을 때만 쓴다("○○공원", "○○거리", "○○숲").
 const weakPlaceWords = {'공원', '파크', '거리', '숲', '광장'};
 
@@ -81,6 +100,7 @@ const placeTypeDefaults = <PlaceType, String>{
 
 /// 장소에 어울리는 스티커를 고른다.
 ///
+/// 0. 명소 이름이면 명소 전용 스티커([landmarkKeywords], 예: 남산서울타워, 경주 동궁과 월지, 안동 하회마을)
 /// 1. 이름에 든 말이 그 장소 종류의 스티커와 맞으면 그것(예: 초당순두부마을 → 찌개, 주문진 수산시장 → 회)
 /// 2. 종류가 달라도 이름에 든 말이 맞으면 그것(예: 맛집으로 저장된 "OO 횟집" → 회)
 ///    단 "공원·거리·숲" 같은 흔한 말([weakPlaceWords])은 또렷한 말이 하나도 없을 때만 본다.
@@ -90,6 +110,9 @@ const placeTypeDefaults = <PlaceType, String>{
 /// [has]로 실제 그림이 있는 것만 고른다. 없으면 null.
 String? stickerForPlace(CheckIn place, {required bool Function(String name) has, Set<String> used = const {}}) {
   final name = place.placeName.replaceAll(' ', '');
+  for (final (words, sticker) in landmarkKeywords) {
+    if (has(sticker) && words.any((w) => name.contains(w.replaceAll(' ', '')))) return sticker;
+  }
   final own = StickerBook.placeStickers[place.type] ?? const <String>[];
   String? byKeyword({required bool ownTypeOnly, required bool weak}) {
     for (final (words, sticker) in placeNameKeywords) {

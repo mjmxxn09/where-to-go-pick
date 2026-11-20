@@ -42,6 +42,14 @@ class StickerBook {
     PlaceType.other: [],
   };
 
+  /// 명소 전용 스티커(손그림). 장소 이름이 맞으면 종류별 스티커보다 먼저 쓴다([landmarkKeywords]).
+  static const landmarkStickers = [
+    'landmark_namsan_tower', 'landmark_gwanghwamun', 'landmark_suwon_hwaseong', 'landmark_donggung_wolji',
+    'landmark_dabotap', 'landmark_seongsan', 'landmark_dokdo', 'landmark_gwangan_bridge',
+    'landmark_haedong_yonggungsa', 'landmark_gamcheon', 'landmark_hahoe_mask', 'landmark_namiseom',
+    'landmark_suncheonman', 'landmark_dodamsambong', 'landmark_daegwallyeong',
+  ];
+
   static const moveStickers = ['move_bus', 'move_car', 'move_bike', 'move_plane', 'move_ship', 'move_walk'];
 
   /// 투표 스티커. [votePin]("한 표 핀")을 장소 옆에 붙이면 그 장소가 투표 후보가 된다(card_stickers.dart [voteCandidates]).
@@ -52,6 +60,7 @@ class StickerBook {
   static List<({String label, List<String> names})> get catalog => [
         for (final e in placeStickers.entries)
           if (e.value.isNotEmpty) (label: e.key.label, names: e.value),
+        (label: '명소', names: landmarkStickers),
         (label: '투표', names: voteStickers),
         (label: '이동', names: moveStickers),
       ];
@@ -65,7 +74,12 @@ class StickerBook {
   bool get isEmpty => _images.isEmpty;
 
   static Future<StickerBook> load(AssetBundle bundle, {int decodeWidth = 256}) async {
-    final names = [for (final list in placeStickers.values) ...list, ...voteStickers, ...moveStickers];
+    final names = [
+      for (final list in placeStickers.values) ...list,
+      ...landmarkStickers,
+      ...voteStickers,
+      ...moveStickers,
+    ];
     final images = <String, ui.Image>{};
     for (final name in names) {
       try {

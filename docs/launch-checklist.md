@@ -33,6 +33,8 @@
 - [ ] `flutter create`로 android/ios 생성, 번들 ID 확정
 - [x] 여행 노트 글꼴: 감자꽃(Gamja Flower, SIL OFL) 포함 — 앱 정보 화면에 라이선스 표시 필요
 - [ ] 제목·지도 라벨 글꼴(Jua, SIL OFL) 파일 추가
-- [ ] 여행 카드 이미지 저장·공유
+- [x] 여행 카드 이미지 저장·공유(갤러리 `gal`, 공유 `share_plus`)
+- [ ] iOS `Info.plist` 사진 추가 문구(`NSPhotoLibraryAddUsageDescription`, `NSPhotoLibraryUsageDescription`)
+- [ ] `android/`·`ios/` 폴더를 저장소에 올릴지 결정(지금은 PC에만 있음 — 매니페스트 수정 내용은 trip-card.md)
 - [ ] 스토어 위치 권한 설명 문구(체크인·걸은 길 기록 때만 사용)
 - [ ] 접근성: 지도는 시·군·구 목록으로도 고를 수 있게

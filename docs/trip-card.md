@@ -46,10 +46,21 @@
 - 당일 여행은 항상 한 장
 - 종이: 모눈 / 점 / 무지
 
+## 이미지 저장·공유 (2026-11-20)
+
+코드: `lib/features/trip_card/export/`, 버튼은 `trip_card_screen.dart`.
+
+- `RepaintBoundary`를 3배 해상도 PNG로 찍는다(스티커 포함, 고를 때 테두리 제외). 나눠 보기는 장을 하나씩 띄워 찍고 원래 장으로 돌아온다.
+- **이미지 저장**: Android·iOS는 사진 갤러리의 "어디갈지 Pick" 앨범(`gal`), 웹은 PNG 다운로드(조건부 import로 갈림). 나눠 보기면 "N장 모두 저장".
+- **공유하기**: 투표 후보 핀이 2곳 미만이면 지금 장 이미지를 공유 시트로(`share_plus`, 웹은 Web Share API 또는 다운로드). 핀이 2곳 이상이면 지금처럼 "투표로 공유".
+- 파일 이름: `어디갈지Pick_강릉_여행(_2일차).png`
+- 플랫폼 설정
+  - Android(`android/`는 아직 저장소 밖): `WRITE_EXTERNAL_STORAGE`(`maxSdkVersion="29"`)와 `<application android:requestLegacyExternalStorage="true">`. Android 10 이상은 권한 창 없이 저장.
+  - iOS(`ios/` 만들 때): `Info.plist`에 `NSPhotoLibraryAddUsageDescription`, 앨범 저장이라 `NSPhotoLibraryUsageDescription`도. 예: "여행 카드를 사진첩에 저장해요."
+
 ## 다음 단계
 
 - 지역 대표 스티커(예: 강릉 커피, 제주 돌하르방) 추가
-- `RepaintBoundary` → PNG 저장·공유(share 플러그인 추가)
 - 걸은 거리·그날 날씨를 하단 요약에 추가(생활 서버 데이터)
 - 한 장이 너무 길어지면(예: 20곳 이상) 자동으로 여러 장으로 나누기
 

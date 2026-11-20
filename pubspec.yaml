@@ -13,6 +13,10 @@ dependencies:
   http: ^1.2.0
   flutter_secure_storage: ^9.2.4
   shared_preferences: ^2.5.5
+  # 여행 카드 이미지: 사진 갤러리 저장(Android·iOS), 공유 시트, 웹 다운로드
+  gal: ^2.3.0
+  share_plus: ^12.0.0
+  web: ^1.1.0
 
 dev_dependencies:
   flutter_test:

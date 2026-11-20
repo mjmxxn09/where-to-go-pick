@@ -1,4 +1,9 @@
+import 'dart:typed_data';
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../app/app_scope.dart';
 import '../../core/theme/app_theme.dart';
@@ -6,6 +11,8 @@ import '../trip/trip_models.dart';
 import '../votes/poll_screen.dart';
 import 'card_cloud.dart';
 import 'card_stickers.dart';
+import 'export/card_image.dart';
+import 'export/card_saver.dart';
 import 'sticker_book.dart';
 import 'sticker_tray.dart';
 import 'trip_card_editor.dart';
@@ -31,6 +38,7 @@ class _TripCardScreenState extends State<TripCardScreen> {
   /// 크게 보기: 보기 방식·스티커 서랍·버튼을 접고 카드만 화면 가득 보여준다.
   var _zoomed = false;
   final _boundaryKey = GlobalKey();
+  var _busy = false;
   final _editorKey = GlobalKey<TripCardEditorState>();
   var _loadStarted = false;
   StickerBook? _book;
@@ -109,8 +117,82 @@ class _TripCardScreenState extends State<TripCardScreen> {
     store.clear(key);
   }
 
-  void _notReady(String what) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$what 기능은 다음 단계에서 붙여요.')));
+  void _snack(String message) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  /// 지금 화면의 카드(스티커 포함)를 PNG로. 고를 때 보이는 테두리는 경계 밖이라 담기지 않는다.
+  Future<Uint8List> _captureCurrent() async {
+    // 방금 바꾼 장이나 스티커가 다 그려진 뒤에 찍는다.
+    await WidgetsBinding.instance.endOfFrame;
+    final boundary = _boundaryKey.currentContext?.findRenderObject();
+    if (boundary is! RenderRepaintBoundary) throw StateError('카드가 화면에 없어요');
+    final image = await boundary.toImage(pixelRatio: 3);
+    try {
+      final data = await image.toByteData(format: ui.ImageByteFormat.png);
+      if (data == null) throw StateError('PNG로 바꾸지 못했어요');
+      return data.buffer.asUint8List();
+    } finally {
+      image.dispose();
+    }
+  }
+
+  /// [indexes] 장을 차례로 화면에 띄워 찍고, 원래 보던 장으로 돌아온다.
+  Future<List<CardImage>> _capturePages(List<TripCardPage> pages, List<int> indexes, {required bool folder}) async {
+    final original = _pageIndex;
+    final images = <CardImage>[];
+    try {
+      for (final i in indexes) {
+        if (_pageIndex != i) {
+          setState(() => _pageIndex = i);
+          await WidgetsBinding.instance.endOfFrame;
+        }
+        images.add(CardImage(bytes: await _captureCurrent(), baseName: cardBaseName(widget.trip, pages[i], folder: folder)));
+      }
+    } finally {
+      if (mounted && _pageIndex != original) setState(() => _pageIndex = original);
+    }
+    return images;
+  }
+
+  /// 갤러리(웹은 다운로드)에 저장. 나눠 보기면 모든 장.
+  Future<void> _saveImages(List<TripCardPage> pages, {required bool folder}) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      final images = await _capturePages(pages, [for (var i = 0; i < pages.length; i++) i], folder: folder);
+      await saveCardImages(images);
+      if (mounted) _snack(images.length > 1 ? '$cardSaveTarget에 ${images.length}장 저장했어요.' : '$cardSaveTarget에 저장했어요.');
+    } on CardSaveException catch (e) {
+      if (mounted) _snack(e.message);
+    } on Object catch (e) {
+      debugPrint('카드 이미지 저장 실패: $e');
+      if (mounted) _snack('이미지를 만들지 못했어요. 잠시 뒤 다시 해 주세요.');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  /// 지금 보는 장을 이미지로 공유(카톡·인스타 등 공유 시트). [origin]은 아이패드 공유 창 위치.
+  Future<void> _shareImage(List<TripCardPage> pages, int index, {required bool folder, Rect? origin}) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      final image = (await _capturePages(pages, [index], folder: folder)).single;
+      await SharePlus.instance.share(ShareParams(
+        text: '${widget.trip.title} · 어디갈지 Pick!',
+        files: [XFile.fromData(image.bytes, mimeType: 'image/png')],
+        fileNameOverrides: [image.fileName],
+        sharePositionOrigin: origin,
+      ));
+    } on Object catch (e) {
+      debugPrint('카드 이미지 공유 실패: $e');
+      if (mounted) _snack('공유하지 못했어요. 잠시 뒤 다시 해 주세요.');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   /// "한 표 핀" 옆의 장소들 = 투표 후보(최대 4곳).
@@ -268,18 +350,31 @@ class _TripCardScreenState extends State<TripCardScreen> {
                 Row(
                   children: [
                     Expanded(
-                      child: FilledButton.icon(
-                        onPressed: candidates.length >= 2 ? () => _shareAsPoll(candidates) : () => _notReady('공유'),
-                        icon: Icon(candidates.length >= 2 ? Icons.how_to_vote_outlined : Icons.ios_share),
-                        label: Text(candidates.length >= 2 ? '투표로 공유' : (folder ? '이 장 공유' : '공유하기')),
+                      child: Builder(
+                        builder: (buttonContext) => FilledButton.icon(
+                          onPressed: !ready || _busy
+                              ? null
+                              : candidates.length >= 2
+                                  ? () => _shareAsPoll(candidates)
+                                  : () {
+                                      final box = buttonContext.findRenderObject() as RenderBox?;
+                                      _shareImage(pages, index,
+                                          folder: folder,
+                                          origin: box == null ? null : box.localToGlobal(Offset.zero) & box.size);
+                                    },
+                          icon: Icon(candidates.length >= 2 ? Icons.how_to_vote_outlined : Icons.ios_share),
+                          label: Text(candidates.length >= 2 ? '투표로 공유' : (folder ? '이 장 공유' : '공유하기')),
+                        ),
                       ),
                     ),
                     const SizedBox(width: Gap.s),
                     Expanded(
                       child: OutlinedButton.icon(
-                        onPressed: () => _notReady('이미지 저장'),
-                        icon: const Icon(Icons.download),
-                        label: Text(folder ? '${pages.length}장 모두 저장' : '이미지 저장'),
+                        onPressed: !ready || _busy ? null : () => _saveImages(pages, folder: folder),
+                        icon: _busy
+                            ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                            : const Icon(Icons.download),
+                        label: Text(_busy ? '만드는 중…' : (folder ? '${pages.length}장 모두 저장' : '이미지 저장')),
                       ),
                     ),
                   ],

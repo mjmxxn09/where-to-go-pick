@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:ui';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -65,21 +66,34 @@ void main() {
     var n = 0;
     String id() => 'id${n++}';
 
-    test('첫 장소는 출발 아래, 반원마다 그 줄 마지막 장소, 마지막 장소는 끝 깃발 위', () {
+    test('장소마다 이름표 반대쪽 길가, 장소 막대 가운데에 붙는다', () {
       final result = autoDecorate(layout, checkIns, has: (_) => true, newId: id);
-      expect(result.length, layout.stickers.length + 2);
-      expect(result.first.name, 'place_beach_parasol'); // 경포해변
-      expect((result.first.x, result.first.y), (36.0, layout.startY + 46));
-      for (var i = 0; i < layout.stickers.length; i++) {
-        final slot = layout.stickers[i];
-        expect(result[i + 1].x, slot.centerX);
-        expect(result[i + 1].y, slot.centerY);
+      expect(result.length, checkIns.length);
+      for (final (i, slot) in layout.stops.indexed) {
+        final s = result[i];
+        expect(s.x, slot.x);
+        // 이름이 아래면 스티커는 위(길 가운데보다 작은 y), 이름이 위면 아래
+        expect(slot.labelAbove ? s.y > slot.y : s.y < slot.y, isTrue);
+        expect((s.y - slot.y).abs(), 8 + 4 + autoStickerSize / 2);
       }
-      // 줄 끝: 오죽헌 → 한옥, 주문진 수산시장 → 회 / 마지막: 솔향수목원 → 숲
-      expect(result.map((s) => s.name),
-          ['place_beach_parasol', 'place_heritage_hanok', 'place_seafood_sashimi', 'place_nature_forest']);
+      expect(result.take(3).map((s) => s.name),
+          ['place_beach_parasol', 'place_cafe_coffee', 'place_heritage_hanok']); // 경포해변·안목 커피거리·오죽헌
       expect(result.map((s) => s.name), isNot(contains('move_car')));
       expect(result.map((s) => s.id).toSet().length, result.length);
+    });
+
+    test('이름표와 겹치면 비켜 보고, 그래도 겹치면 건너뛴다', () {
+      final first = layout.stops.first;
+      final spot = Offset(first.x, first.labelAbove ? first.y + 39 : first.y - 39);
+      // 첫 장소 스티커 자리 오른쪽만 막으면 왼쪽으로 비킨다
+      final shifted = autoDecorate(layout, checkIns, has: (_) => true, newId: id,
+          avoid: [Rect.fromLTWH(spot.dx + 14, spot.dy - 10, 40, 20)]);
+      expect(shifted.first.x, lessThan(first.x));
+      // 자리 전체를 막으면 그 장소는 건너뛴다
+      final skipped = autoDecorate(layout, checkIns, has: (_) => true, newId: id,
+          avoid: [Rect.fromCenter(center: spot, width: 120, height: 60)]);
+      expect(skipped.length, checkIns.length - 1);
+      expect(skipped.first.name, isNot('place_beach_parasol'));
     });
 
     test('그림이 없는 스티커는 고르지 않는다', () {

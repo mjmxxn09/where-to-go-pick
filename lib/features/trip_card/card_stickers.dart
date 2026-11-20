@@ -9,6 +9,7 @@ library;
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
+import 'dart:ui' show Offset, Rect;
 
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -128,40 +129,57 @@ String cardPageKey(Trip trip, TripCardMode mode, TripCardPage page) {
   return '${trip.id}:day${page.days.first.index}';
 }
 
-/// "자동으로 꾸미기": 장소 이름·종류에 어울리는 스티커를 그 장소 가까이에 붙인다([stickerForPlace]).
+/// "자동으로 꾸미기"가 붙이는 스티커 크기(카드 좌표).
+const autoStickerSize = 54.0;
+
+/// "자동으로 꾸미기": 장소마다 어울리는 스티커([stickerForPlace])를 그 장소 바로 옆, 이름표 반대쪽 길가에 붙인다.
 ///
-/// - 출발 핀 아래: 첫 장소
-/// - 길이 꺾이는 반원 안쪽: 그 줄 마지막 장소
-/// - 끝 깃발 위: 마지막 장소
-///
-/// 이동 수단(자동차·발자국)은 어떻게 다녔는지 몰라 붙이지 않는다. [has]로 실제 그림이 있는 스티커만 고른다.
+/// - 이름이 길 아래면 스티커는 길 위, 이름이 위면 아래. 장소 막대 가운데에 맞추고 길에서 4만큼 띄운다.
+/// - 다른 장소 이름표([avoid]), 제목, 출발 핀·끝 깃발, 먼저 붙인 스티커, 카드 밖과 겹치면 좌우로 조금 비켜 보고,
+///   그래도 겹치면 그 장소는 건너뛴다.
+/// - [stops]는 유저가 옮긴 장소 막대 자리(없으면 기본 자리). 이동 스티커는 붙이지 않는다.
 List<PlacedSticker> autoDecorate(
   TripCardLayout layout,
   List<CheckIn> checkIns, {
   required bool Function(String name) has,
   required String Function() newId,
+  List<StopSlot>? stops,
+  List<Rect> avoid = const [],
+  double size = autoStickerSize,
+  double pageWidth = 358,
 }) {
+  const roadHalf = 8.0, gap = 4.0, titleBottom = 92.0, margin = 4.0;
+  // 스티커 그림은 가장자리에 투명한 여백이 있어 겹침은 조금 작게 본다.
+  final hit = size * 0.86;
+  final blocked = <Rect>[
+    for (final r in avoid) r.inflate(3),
+    Rect.fromLTWH(layout.startX - 14, layout.startY - 32, 28, 34), // 출발 핀
+    Rect.fromLTWH(layout.endX - 24, layout.endY - 38, 48, 40), // 끝 깃발
+  ];
   final result = <PlacedSticker>[];
-  if (checkIns.isEmpty) return result;
   final used = <String>{};
 
-  void put(CheckIn place, double x, double y, double size) {
+  for (final slot in stops ?? layout.stops) {
+    if (slot.index >= checkIns.length) continue;
+    final place = checkIns[slot.index];
     final name = stickerForPlace(place, has: has, used: used);
-    if (name == null) return;
-    used.add(name);
-    // 살짝 기울여 손으로 붙인 느낌(장소 이름으로 고정).
-    final tilt = ((place.placeName.length % 5) - 2) * 0.04;
-    result.add(PlacedSticker(id: newId(), name: name, x: x, y: y, size: size, rotation: tilt));
-  }
-
-  put(checkIns.first, 36, layout.startY + 46, 64);
-  for (final slot in layout.stickers) {
-    if (slot.stopIndex <= 0 || slot.stopIndex >= checkIns.length) continue;
-    put(checkIns[slot.stopIndex], slot.centerX, slot.centerY, slot.maxWidth + 10);
-  }
-  final last = checkIns.length - 1;
-  if (last > 0 && !layout.stickers.any((s) => s.stopIndex == last)) {
-    put(checkIns[last], layout.endX, layout.endY - 67, 60);
+    if (name == null) continue;
+    final dir = slot.labelAbove ? 1.0 : -1.0; // 이름 반대쪽
+    final cy = slot.y + dir * (roadHalf + gap + size / 2);
+    for (final dx in const [0.0, -10.0, 10.0, -20.0, 20.0]) {
+      final box = Rect.fromCenter(center: Offset(slot.x + dx, cy), width: hit, height: hit);
+      final inside = box.left >= margin &&
+          box.right <= pageWidth - margin &&
+          box.top >= titleBottom &&
+          box.bottom <= layout.pageHeight - margin;
+      if (!inside || blocked.any(box.overlaps)) continue;
+      used.add(name);
+      blocked.add(box.inflate(2));
+      // 살짝 기울여 손으로 붙인 느낌(장소 이름으로 고정).
+      final tilt = ((place.placeName.length % 5) - 2) * 0.04;
+      result.add(PlacedSticker(id: newId(), name: name, x: slot.x + dx, y: cy, size: size, rotation: tilt));
+      break;
+    }
   }
   return result;
 }

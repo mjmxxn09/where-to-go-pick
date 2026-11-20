@@ -84,7 +84,20 @@ class _TripCardScreenState extends State<TripCardScreen> {
     final book = _book;
     if (store == null || book == null) return;
     if (store.stickersOf(key).isNotEmpty && !await _confirm('지금 붙인 스티커를 떼고 자동으로 꾸밀까요?')) return;
-    store.replaceAll(key, autoDecorate(TripNoteView.layoutOf(page), page.checkIns, has: book.has, newId: store.newId));
+    // 이름표를 덮지 않게, 지금 장소 막대 자리(옮긴 것 포함)와 이름표 칸을 재서 넘긴다.
+    final boxes = TripNoteView.stopBoxes(page, store.stopEditsOf(key));
+    store.replaceAll(
+      key,
+      autoDecorate(
+        TripNoteView.layoutOf(page),
+        page.checkIns,
+        has: book.has,
+        newId: store.newId,
+        stops: [for (final b in boxes) b.slot],
+        avoid: [for (final b in boxes) b.label],
+        pageWidth: TripNoteView.config.pageWidth,
+      ),
+    );
   }
 
   Future<void> _clearStickers(String key) async {

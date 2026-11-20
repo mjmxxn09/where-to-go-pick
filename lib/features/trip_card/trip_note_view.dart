@@ -38,6 +38,23 @@ class TripNoteView extends StatelessWidget {
 
   static Size pageSize(TripCardPage page) => Size(config.pageWidth, layoutOf(page).pageHeight);
 
+  /// 장소마다 길 위 자리(옮긴 것 반영)와 이름표(시간+이름)가 차지하는 칸.
+  /// "자동으로 꾸미기"가 스티커로 이름을 덮지 않게 쓴다. 그리는 것과 같은 글자 크기로 잰다.
+  static List<({String id, StopSlot slot, Rect label})> stopBoxes(TripCardPage page, Map<String, StopEdit> stopEdits) {
+    final layout = layoutOf(page);
+    final checkIns = page.checkIns;
+    return [
+      for (final base in layout.stops)
+        if (base.index < checkIns.length)
+          () {
+            final c = checkIns[base.index];
+            final slot = applyStopEdit(base, stopEdits[c.id], layout.rows, config: config);
+            final (time: time, name: name) = _stopLabel(page, c, layout.labelMaxWidth, _dayColors.first);
+            return (id: c.id, slot: slot, label: _labelRect(slot, time, name));
+          }(),
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
     final checkIns = page.checkIns;
@@ -107,8 +124,6 @@ class _TripNotePainter extends CustomPainter {
     _road(canvas);
 
     final checkIns = page.checkIns;
-    final multiDay = page.days.length > 1;
-    final firstOfDay = <String>{for (final d in page.days) if (d.checkIns.isNotEmpty) d.checkIns.first.id};
     final dayOf = <String, int>{for (final d in page.days) for (final c in d.checkIns) c.id: d.index};
 
     for (final base in layout.stops) {
@@ -125,19 +140,10 @@ class _TripNotePainter extends CustomPainter {
           ..strokeWidth = 2
           ..strokeCap = StrokeCap.round,
       );
-      final time = multiDay && firstOfDay.contains(c.id) ? '${(dayOf[c.id] ?? 0) + 1}일차 ${_hm(c.at)}' : _hm(c.at);
-      final timeTp = _layoutText(time, 10, color, weight: FontWeight.w700);
-      final nameTp = _layoutPlaceName(c.placeName, layout.labelMaxWidth);
-      if (slot.labelAbove) {
-        // 위쪽: [시간] [이름] [눈금] 순서로 아래에서 위로 쌓는다.
-        final nameTop = slot.y - 20 - nameTp.height;
-        nameTp.paint(canvas, Offset(slot.x - nameTp.width / 2, nameTop));
-        timeTp.paint(canvas, Offset(slot.x - timeTp.width / 2, nameTop - timeTp.height - 1));
-      } else {
-        // 아래쪽: [눈금] [시간] [이름]
-        timeTp.paint(canvas, Offset(slot.x - timeTp.width / 2, slot.y + 20));
-        nameTp.paint(canvas, Offset(slot.x - nameTp.width / 2, slot.y + 20 + timeTp.height + 1));
-      }
+      final (time: timeTp, name: nameTp) = _stopLabel(page, c, layout.labelMaxWidth, color);
+      final (time: timeAt, name: nameAt) = _labelOffsets(slot, timeTp, nameTp);
+      timeTp.paint(canvas, timeAt);
+      nameTp.paint(canvas, nameAt);
     }
 
     _startPin(canvas);
@@ -266,32 +272,6 @@ class _TripNotePainter extends CustomPainter {
       );
   }
 
-  /// 장소 이름: 띄어쓰기 단위로 최대 2줄([wrapByWords]). 안 들어가면 13px → 11px까지 줄이고,
-  /// 그래도 안 되면(띄어쓰기 없는 아주 긴 이름) 2줄 말줄임(…).
-  TextPainter _layoutPlaceName(String text, double maxWidth) {
-    TextPainter make(String t, double size, {TextAlign align = TextAlign.center, bool clip = false}) => TextPainter(
-          text: TextSpan(
-            text: t,
-            style: TextStyle(fontFamily: AppFonts.handwriting, fontSize: size, height: 1.05, color: AppColors.mapLabel),
-          ),
-          textAlign: align,
-          textDirection: TextDirection.ltr,
-          maxLines: clip ? 2 : null,
-          ellipsis: clip ? '…' : null,
-        );
-    for (var size = 13.0; size >= 11; size -= 1) {
-      final lines = wrapByWords(text, maxWidth, (line) => (make(line, size, align: TextAlign.left)..layout()).width);
-      if (lines != null) return make(lines.join('\n'), size)..layout(maxWidth: maxWidth + 1);
-    }
-    return make(text, 11, clip: true)..layout(maxWidth: maxWidth);
-  }
-
-  TextPainter _layoutText(String text, double size, Color color, {FontWeight weight = FontWeight.w400}) =>
-      TextPainter(
-        text: TextSpan(text: text, style: TextStyle(fontSize: size, height: 1.1, color: color, fontWeight: weight)),
-        textDirection: TextDirection.ltr,
-      )..layout();
-
   void _text(
     Canvas canvas,
     String text,
@@ -316,3 +296,61 @@ class _TripNotePainter extends CustomPainter {
   bool shouldRepaint(covariant _TripNotePainter old) =>
       old.page != page || old.paper != paper || old.trip != trip || old.title != title || old.stopEdits != stopEdits;
 }
+
+/// 장소 하나의 이름표 글자: 시간(여러 날 카드면 그날 첫 장소에 "N일차") + 이름.
+({TextPainter time, TextPainter name}) _stopLabel(TripCardPage page, CheckIn c, double labelMaxWidth, Color color) {
+  final day = page.days.where((d) => d.checkIns.any((x) => x.id == c.id)).firstOrNull;
+  final time = page.days.length > 1 && day != null && day.checkIns.first.id == c.id
+      ? '${day.index + 1}일차 ${_hm(c.at)}'
+      : _hm(c.at);
+  return (
+    time: _layoutText(time, 10, color, weight: FontWeight.w700),
+    name: _layoutPlaceName(c.placeName, labelMaxWidth),
+  );
+}
+
+/// 위쪽 이름표는 [시간][이름][눈금] 순서로 아래에서 위로, 아래쪽은 [눈금][시간][이름].
+({Offset time, Offset name}) _labelOffsets(StopSlot slot, TextPainter time, TextPainter name) {
+  if (slot.labelAbove) {
+    final nameTop = slot.y - 20 - name.height;
+    return (
+      time: Offset(slot.x - time.width / 2, nameTop - time.height - 1),
+      name: Offset(slot.x - name.width / 2, nameTop),
+    );
+  }
+  return (
+    time: Offset(slot.x - time.width / 2, slot.y + 20),
+    name: Offset(slot.x - name.width / 2, slot.y + 20 + time.height + 1),
+  );
+}
+
+Rect _labelRect(StopSlot slot, TextPainter time, TextPainter name) {
+  final (time: t, name: n) = _labelOffsets(slot, time, name);
+  return (t & time.size).expandToInclude(n & name.size);
+}
+
+/// 장소 이름: 띄어쓰기 단위로 최대 2줄([wrapByWords]). 안 들어가면 13px → 11px까지 줄이고,
+/// 그래도 안 되면(띄어쓰기 없는 아주 긴 이름) 2줄 말줄임(…).
+TextPainter _layoutPlaceName(String text, double maxWidth) {
+  TextPainter make(String t, double size, {TextAlign align = TextAlign.center, bool clip = false}) => TextPainter(
+        text: TextSpan(
+          text: t,
+          style: TextStyle(fontFamily: AppFonts.handwriting, fontSize: size, height: 1.05, color: AppColors.mapLabel),
+        ),
+        textAlign: align,
+        textDirection: TextDirection.ltr,
+        maxLines: clip ? 2 : null,
+        ellipsis: clip ? '…' : null,
+      );
+  for (var size = 13.0; size >= 11; size -= 1) {
+    final lines = wrapByWords(text, maxWidth, (line) => (make(line, size, align: TextAlign.left)..layout()).width);
+    if (lines != null) return make(lines.join('\n'), size)..layout(maxWidth: maxWidth + 1);
+  }
+  return make(text, 11, clip: true)..layout(maxWidth: maxWidth);
+}
+
+TextPainter _layoutText(String text, double size, Color color, {FontWeight weight = FontWeight.w400}) =>
+    TextPainter(
+      text: TextSpan(text: text, style: TextStyle(fontSize: size, height: 1.1, color: color, fontWeight: weight)),
+      textDirection: TextDirection.ltr,
+    )..layout();

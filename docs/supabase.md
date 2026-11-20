@@ -51,8 +51,9 @@
    ```
 2. **테이블 만들기**
    ```bash
-   npx supabase db push
+   npx supabase db push --remote
    ```
+   `--remote`가 없으면 CLI가 내 PC의 로컬 Supabase(Docker)로 보내려다 `127.0.0.1:54322` 연결 오류가 난다.
    대시보드 Table Editor에 `trips`, `check_ins`, `card_decorations`가 보이면 된다.
 3. **게스트 로그인 켜기(개발용)**: 대시보드 Authentication → Sign In / Providers → **Allow anonymous sign-ins** 켜기.
 4. **토큰 서명 키**(픽클 로그인으로 올릴 때 필요. 게스트만 쓸 땐 나중에 해도 된다)

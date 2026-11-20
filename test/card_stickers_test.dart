@@ -65,17 +65,20 @@ void main() {
     var n = 0;
     String id() => 'id${n++}';
 
-    test('반원마다 장소 스티커 하나 + 자동차 + 발자국', () {
+    test('첫 장소는 출발 아래, 반원마다 그 줄 마지막 장소, 마지막 장소는 끝 깃발 위', () {
       final result = autoDecorate(layout, checkIns, has: (_) => true, newId: id);
       expect(result.length, layout.stickers.length + 2);
+      expect(result.first.name, 'place_beach_parasol'); // 경포해변
+      expect((result.first.x, result.first.y), (36.0, layout.startY + 46));
       for (var i = 0; i < layout.stickers.length; i++) {
         final slot = layout.stickers[i];
-        final type = checkIns[slot.stopIndex].type;
-        expect(StickerBook.placeStickers[type], contains(result[i].name));
-        expect(result[i].x, slot.centerX);
-        expect(result[i].y, slot.centerY);
+        expect(result[i + 1].x, slot.centerX);
+        expect(result[i + 1].y, slot.centerY);
       }
-      expect(result.map((s) => s.name), containsAll(['move_car', 'move_walk']));
+      // 줄 끝: 오죽헌 → 한옥, 주문진 수산시장 → 회 / 마지막: 솔향수목원 → 숲
+      expect(result.map((s) => s.name),
+          ['place_beach_parasol', 'place_heritage_hanok', 'place_seafood_sashimi', 'place_nature_forest']);
+      expect(result.map((s) => s.name), isNot(contains('move_car')));
       expect(result.map((s) => s.id).toSet().length, result.length);
     });
 

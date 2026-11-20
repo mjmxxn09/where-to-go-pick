@@ -14,6 +14,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../trip/trip_models.dart';
+import 'place_sticker_match.dart';
 import 'sticker_book.dart';
 import 'trip_card_layout.dart';
 
@@ -127,8 +128,13 @@ String cardPageKey(Trip trip, TripCardMode mode, TripCardPage page) {
   return '${trip.id}:day${page.days.first.index}';
 }
 
-/// "자동으로 꾸미기": 길이 꺾이는 반원 안쪽에 그 줄 마지막 장소의 스티커, 출발 아래 자동차, 끝 깃발 위 발자국.
-/// [has]로 실제 그림이 있는 스티커만 고른다.
+/// "자동으로 꾸미기": 장소 이름·종류에 어울리는 스티커를 그 장소 가까이에 붙인다([stickerForPlace]).
+///
+/// - 출발 핀 아래: 첫 장소
+/// - 길이 꺾이는 반원 안쪽: 그 줄 마지막 장소
+/// - 끝 깃발 위: 마지막 장소
+///
+/// 이동 수단(자동차·발자국)은 어떻게 다녔는지 몰라 붙이지 않는다. [has]로 실제 그림이 있는 스티커만 고른다.
 List<PlacedSticker> autoDecorate(
   TripCardLayout layout,
   List<CheckIn> checkIns, {
@@ -136,28 +142,26 @@ List<PlacedSticker> autoDecorate(
   required String Function() newId,
 }) {
   final result = <PlacedSticker>[];
-  for (final slot in layout.stickers) {
-    if (slot.stopIndex >= checkIns.length) continue;
-    final place = checkIns[slot.stopIndex];
-    final options = (StickerBook.placeStickers[place.type] ?? const <String>[]).where(has).toList();
-    final name = pickVariant(options, place.placeName);
-    if (name == null) continue;
+  if (checkIns.isEmpty) return result;
+  final used = <String>{};
+
+  void put(CheckIn place, double x, double y, double size) {
+    final name = stickerForPlace(place, has: has, used: used);
+    if (name == null) return;
+    used.add(name);
     // 살짝 기울여 손으로 붙인 느낌(장소 이름으로 고정).
     final tilt = ((place.placeName.length % 5) - 2) * 0.04;
-    result.add(PlacedSticker(
-      id: newId(),
-      name: name,
-      x: slot.centerX,
-      y: slot.centerY,
-      size: slot.maxWidth + 10,
-      rotation: tilt,
-    ));
+    result.add(PlacedSticker(id: newId(), name: name, x: x, y: y, size: size, rotation: tilt));
   }
-  if (has('move_car')) {
-    result.add(PlacedSticker(id: newId(), name: 'move_car', x: 36, y: layout.startY + 46, size: 64));
+
+  put(checkIns.first, 36, layout.startY + 46, 64);
+  for (final slot in layout.stickers) {
+    if (slot.stopIndex <= 0 || slot.stopIndex >= checkIns.length) continue;
+    put(checkIns[slot.stopIndex], slot.centerX, slot.centerY, slot.maxWidth + 10);
   }
-  if (has('move_walk')) {
-    result.add(PlacedSticker(id: newId(), name: 'move_walk', x: layout.endX, y: layout.endY - 67, size: 58));
+  final last = checkIns.length - 1;
+  if (last > 0 && !layout.stickers.any((s) => s.stopIndex == last)) {
+    put(checkIns[last], layout.endX, layout.endY - 67, 60);
   }
   return result;
 }

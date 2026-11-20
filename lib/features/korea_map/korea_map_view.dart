@@ -298,6 +298,9 @@ class _KoreaMapPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     canvas.save();
+    // 주변 도 배경(context)은 지도 칸(340×380)보다 20씩 넓게 그려져 있다. 자르지 않으면
+    // 위쪽 "전국"·도 이름 칩 위까지 덮어 버린다(경상북도·울릉도에서 눈에 띔).
+    canvas.clipRect(Offset.zero & size);
     canvas.translate(offset.dx, offset.dy);
     canvas.scale(scale);
 

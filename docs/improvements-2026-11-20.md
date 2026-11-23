@@ -81,5 +81,5 @@ flutter pub get
 npx supabase db push --remote          # planned_days 칸
 npx supabase functions deploy life     # 날씨 좌표 호출 줄이기
 flutter test
-flutter run --dart-define-from-file=env/dev.json
+flutter run   # (2026-11-23부터 서버 설정이 기본값이라 옵션 없이)
 ```

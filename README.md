@@ -27,20 +27,26 @@
 flutter create . --project-name where_to_go_pick --org io.github.mjmxxn09 --platforms android,ios
 flutter pub get
 flutter test
-flutter run                     # 예시 데이터 모드(서버 없이, 장소는 강릉 예시뿐)
+flutter run                     # 우리 Supabase에 연결(실제 장소·날씨, 여행 기록 저장)
+flutter run --dart-define=SAMPLE_MODE=true   # 서버 없이 예시 데이터(장소는 강릉 예시뿐)
 ```
 
 `flutter create .`는 이미 있는 파일(`lib/main.dart`, `pubspec.yaml`, `test/widget_test.dart`)을 덮어쓰지 않아요.
 
-### 서버에 연결하기
+### 서버 설정 바꾸기
+
+Supabase 주소와 publishable 키는 앱에 들어가는 공개 값이라 코드(`lib/core/config/app_config.dart`)에 기본값으로 있어요.
+다른 값을 쓸 때만 `env/dev.json`(커밋되지 않음)을 만들어 덮어써요.
 
 ```bash
-cp env/dev.example.json env/dev.json   # env/dev.json은 커밋되지 않아요
+cp env/dev.example.json env/dev.json
 flutter run --dart-define-from-file=env/dev.json
 ```
 
 | 키 | 뜻 |
 |---|---|
+| `SAMPLE_MODE` | `true`면 서버 없이 예시 데이터 |
+| `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY` | 다른 Supabase 프로젝트를 쓸 때만(기본값은 우리 프로젝트) |
 | `PICKLE_API_BASE_URL` | 픽클 Backend 주소. 비우면 예시 데이터 |
 | `LIFE_API_BASE_URL` | 날씨·관광정보 프록시와 여행 기록을 맡을 생활 서버(아직 없음). 비우면 예시 데이터 |
 | `APP_VERSION` | 로그인 시 서버에 보내는 앱 버전 |

@@ -103,7 +103,8 @@
    npx supabase functions deploy life
    ```
    `SERVICE_KEY_IS_NOT_REGISTERED_ERROR`가 나오면 승인 직후일 수 있다(1시간쯤 뒤 다시).
-7. **앱 설정**: `env/dev.json`(커밋되지 않음)에 두 줄 추가 후 `--dart-define-from-file=env/dev.json`으로 실행.
+7. **앱 설정**: 주소와 publishable 키는 `AppConfig`에 기본값으로 들어 있어 `flutter run`만 하면 연결된다(2026-11-23).
+   다른 프로젝트를 쓸 때만 `env/dev.json`으로 덮어쓰고, 서버 없이 보려면 `--dart-define=SAMPLE_MODE=true`.
    ```json
    "SUPABASE_URL": "https://vwgtsqjpemvyhmjvlgoe.supabase.co",
    "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_..."
@@ -113,7 +114,7 @@
 
 | 값 | 어디에 | 공개돼도 되나 |
 |---|---|---|
-| Project URL, publishable 키 | `env/dev.json` → 앱 | 된다(앱에 들어가는 값). 권한은 RLS가 막는다 |
+| Project URL, publishable 키 | `AppConfig` 기본값(앱 코드) | 된다(앱에 들어가는 값). 권한은 RLS가 막는다 |
 | DB 비밀번호 | 비밀번호 관리자, `supabase link` 때만 | 안 된다 |
 | secret 키(`sb_secret_…`, service_role) | 쓰지 않는다 | 안 된다 — RLS를 무시한다 |
 | 서명 개인키(JWK) | `supabase/functions/.env` → `supabase secrets set` | 안 된다 — 아무 사용자 토큰이나 만들 수 있다 |

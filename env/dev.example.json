@@ -1,7 +1,4 @@
 {
   "PICKLE_API_BASE_URL": "",
-  "LIFE_API_BASE_URL": "",
-  "APP_VERSION": "0.1.0",
-  "SUPABASE_URL": "",
-  "SUPABASE_PUBLISHABLE_KEY": ""
+  "APP_VERSION": "0.1.0"
 }

@@ -24,13 +24,8 @@ class ExploreScreen extends StatefulWidget {
 
 class _ExploreScreenState extends State<ExploreScreen> {
 
-  // 처음엔 강원 → 강릉시가 골라진 상태로 연다(예시).
-  SelectedCity? _city = const SelectedCity(
-    id: '32030',
-    name: '강릉시',
-    provinceCode: '32',
-    provinceName: '강원특별자치도',
-  );
+  /// 고른 여행지. 처음엔 아무것도 고르지 않은 전국 지도로 연다.
+  SelectedCity? _city;
 
   /// ♡로 담은 여행지 후보(최대 4곳, 기기에 저장). 2곳부터 친구한테 물어볼 수 있다.
   TripCandidates? _cands;

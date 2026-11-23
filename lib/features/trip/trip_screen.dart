@@ -157,6 +157,33 @@ class _TripScreenState extends State<TripScreen> {
     });
   }
 
+  /// "✓ 다녀옴"을 누르면: 잘못 누른 체크인을 취소(묻고 나서). 취소한 뒤에도 잠깐 되돌리기.
+  Future<void> _undoCheckIn(TripController controller, PlaceSuggestion place) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('${place.name} 체크인을 취소할까요?'),
+        content: const Text('잘못 눌렀다면 취소하세요. 다녀온 기록과 카드에서 빠져요.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('그대로 두기')),
+          FilledButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('체크인 취소')),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    final removed = controller.removeCheckIn(place.id);
+    if (removed == null) return;
+    if (_ask?.just.id == removed.id || _ask?.other.id == removed.id) setState(() => _ask = null);
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(
+        content: Text('${removed.placeName} 체크인을 취소했어요.'),
+        duration: const Duration(seconds: 4),
+        persist: false,
+        action: SnackBarAction(label: '되돌리기', onPressed: () => controller.restoreCheckIn(removed)),
+      ));
+  }
+
   void _checkIn(TripController controller, PlaceSuggestion place) {
     controller.checkIn(place);
     // 잘못 눌렀을 때 바로 되돌릴 수 있게.
@@ -293,6 +320,7 @@ class _TripScreenState extends State<TripScreen> {
         voted: _myVotes.contains(p.id),
         // 출발 전에는 체크인을 막는다(가볼 곳 담기는 된다).
         onCheckIn: trip.isBeforeStart(DateTime.now()) ? null : () => _checkIn(controller, p),
+        onUndoCheckIn: () => _undoCheckIn(controller, p),
         onTogglePlan: () => controller.togglePlanned(p, day: _dayInRange(trip, _planDay)),
         onVote: () => _togglePlaceVote(trip.cityId, p.id),
       );
@@ -760,6 +788,7 @@ class _PlaceTile extends StatelessWidget {
     required this.planned,
     required this.voted,
     required this.onCheckIn,
+    this.onUndoCheckIn,
     required this.onTogglePlan,
     required this.onVote,
     this.rank,
@@ -783,6 +812,9 @@ class _PlaceTile extends StatelessWidget {
   final bool planned;
   final bool voted;
   final VoidCallback? onCheckIn;
+
+  /// "✓ 다녀옴"을 누르면(잘못 누른 체크인 취소).
+  final VoidCallback? onUndoCheckIn;
   final VoidCallback onTogglePlan;
   final VoidCallback onVote;
 
@@ -882,13 +914,21 @@ class _PlaceTile extends StatelessWidget {
           const SizedBox(width: 2),
           done
               ? Semantics(
-                  label: '체크인 완료',
+                  button: true,
+                  label: '체크인 완료, 누르면 체크인 취소',
                   excludeSemantics: true,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
-                    decoration: BoxDecoration(color: const Color(0xFFF0EDFF), borderRadius: BorderRadius.circular(12)),
-                    child: const Text('✓ 다녀옴',
-                        style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: AppColors.primaryDeep)),
+                  child: Material(
+                    color: const Color(0xFFF0EDFF),
+                    borderRadius: BorderRadius.circular(12),
+                    child: InkWell(
+                      onTap: onUndoCheckIn,
+                      borderRadius: BorderRadius.circular(12),
+                      child: const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 9, vertical: 7),
+                        child: Text('✓ 다녀옴',
+                            style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: AppColors.primaryDeep)),
+                      ),
+                    ),
                   ),
                 )
               : FilledButton(onPressed: onCheckIn, child: const Text('체크인')),

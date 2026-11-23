@@ -8,6 +8,7 @@ import 'package:share_plus/share_plus.dart';
 import '../../app/app_scope.dart';
 import '../../core/theme/app_theme.dart';
 import '../trip/trip_models.dart';
+import '../votes/poll_question_sheet.dart';
 import '../votes/poll_screen.dart';
 import 'card_cloud.dart';
 import 'card_stickers.dart';
@@ -224,16 +225,25 @@ class _TripCardScreenState extends State<TripCardScreen> {
     ];
   }
 
-  void _shareAsPoll(List<CheckIn> candidates) {
+  Future<void> _shareAsPoll(List<CheckIn> candidates) async {
     final trip = widget.trip;
     final votes = AppScope.of(context).votes;
     final place = trip.title.replaceAll(RegExp(r'\s*여행$'), '');
+    final ideas = cardQuestionIdeas(place);
+    final question = await showPollQuestionSheet(
+      context,
+      initial: ideas.first,
+      ideas: ideas,
+      candidates: [for (final c in candidates) c.placeName],
+      confirmLabel: '이 질문으로 공유하기',
+    );
+    if (question == null || !mounted) return;
     Navigator.of(context).push(MaterialPageRoute<void>(
       builder: (_) => PollScreen(
         title: '여행 카드 투표',
         poll: votes.shareCardPoll(
           tripId: trip.id,
-          question: '$place 가면 어디부터 가야 해?',
+          question: question,
           places: [for (final c in candidates) (key: c.id, label: c.placeName)],
         ),
       ),

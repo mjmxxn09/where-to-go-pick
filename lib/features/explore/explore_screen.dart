@@ -9,6 +9,7 @@ import '../korea_map/korea_map_view.dart';
 import '../shared/weather_icon.dart';
 import '../trip/trip_dates_sheet.dart';
 import '../trip/trip_models.dart';
+import '../votes/poll_question_sheet.dart';
 import '../votes/poll_screen.dart';
 import 'trip_candidates.dart';
 
@@ -57,12 +58,21 @@ class _ExploreScreenState extends State<ExploreScreen> {
 
   void _toggleCandidate(SelectedCity c) => _cands?.toggle(c);
 
-  void _askFriends() {
+  /// 질문을 고르거나 직접 써서(기본: "강릉 vs 속초, 어디 갈까?") 투표를 만든다.
+  Future<void> _askFriends() async {
     final store = _cands;
     if (store == null) return;
     final picked = List.of(store.items);
+    final names = [for (final c in picked) regionShortName(c.name)];
+    final question = await showPollQuestionSheet(
+      context,
+      initial: defaultRegionQuestion(names),
+      ideas: regionQuestionIdeas,
+      candidates: names,
+    );
+    if (question == null || !mounted) return;
     final poll = AppScope.of(context).votes.askFriends(
-      question: '이번 주말 어디 갈까?',
+      question: question,
       cities: [for (final c in picked) (key: c.id, label: c.name)],
     ).then((p) {
       // 후보를 나중에 비워도 이 투표는 따로 남는다.

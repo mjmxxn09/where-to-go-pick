@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:where_to_go_pick/core/votes/vote_repository.dart';
 import 'package:where_to_go_pick/features/trip_card/card_stickers.dart';
 import 'package:where_to_go_pick/features/votes/pickle_ask_bubble.dart';
+import 'package:where_to_go_pick/features/votes/poll_question_sheet.dart';
 
 void main() {
   test('다녀온 사람 순위 문구', () {
@@ -81,5 +82,14 @@ void main() {
     ];
     expect(voteCandidates(stickers, stops), ['ojuk', 'gyeongpo']);
     expect(voteCandidates(const [], stops), isEmpty);
+  });
+
+  test('후보 투표 기본 질문은 후보 이름으로, 길면 짧은 질문', () {
+    expect(defaultRegionQuestion(['강릉', '속초']), '강릉 vs 속초, 어디 갈까?');
+    expect(defaultRegionQuestion(['강릉', '속초', '양양']), '강릉·속초·양양 중 어디 갈까?');
+    expect(defaultRegionQuestion(['강릉']), '어디로 여행 갈까?');
+    final long = defaultRegionQuestion(['서귀포', '남해', '고성', '아주아주긴지역이름입니다만요정말로길어요']);
+    expect(long.length, lessThanOrEqualTo(pollQuestionMaxLength));
+    expect(cardQuestionIdeas('강릉').first, '강릉 가면 어디부터 가야 해?');
   });
 }

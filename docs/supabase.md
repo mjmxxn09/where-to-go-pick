@@ -92,6 +92,7 @@
 5. **함수 비밀값과 배포**: `supabase/functions/.env` 파일을 만든다(`.gitignore`에 걸려 커밋되지 않는다).
    ```dotenv
    PICKLE_API_BASE_URL=https://픽클-개발-서버-주소
+   PICKLE_ENV=dev                                                            # 상용 서버로 바꿀 때 prod
    PICKLE_EXCHANGE_SIGNING_JWK='{"kty":"EC","kid":"...","d":"...", ...}'   # 4번에서 나온 JSON 객체 한 줄을 작은따옴표로 감싸서
    ```
    ```bash
@@ -99,6 +100,9 @@
    npx supabase functions deploy pickle-exchange
    ```
    픽클 서버가 사내망에서만 열려 있으면 Supabase가 `/v1/me`에 닿지 못한다(502 `PICKLE_UNAVAILABLE`). 외부에서 닿는 주소가 필요하다.
+   - 이 함수는 픽클 서버 **하나**만 믿는다. 앱을 개발 서버로 돌리면 함수도 개발 서버, 상용이면 상용.
+     둘을 동시에 쓰려면 Supabase 프로젝트를 둘로 나눈다(개발용·상용용).
+   - `PICKLE_ENV=dev`면 sub가 `pickle-dev:<번호>`라서 개발 서버 회원 기록이 상용 회원 기록과 섞이지 않는다.
 6. **여행지 정보 함수**: 공공데이터포털에서 `한국관광공사_국문 관광정보 서비스_GW`, `기상청_단기예보 조회서비스` 활용신청 후,
    `supabase/functions/.env`에 `DATA_GO_KR_SERVICE_KEY=일반 인증키(Decoding)`를 넣고
    ```bash

@@ -39,9 +39,14 @@ Supabase 주소와 publishable 키는 앱에 들어가는 공개 값이라 코�
 다른 값을 쓸 때만 `env/dev.json`(커밋되지 않음)을 만들어 덮어써요.
 
 ```bash
-cp env/dev.example.json env/dev.json
+cp env/dev.example.json env/dev.json     # 픽클 개발 서버 주소
+cp env/prod.example.json env/prod.json   # 픽클 상용 서버 주소
 flutter run --dart-define-from-file=env/dev.json
+flutter build apk --dart-define-from-file=env/prod.json
 ```
+
+픽클 서버 주소를 넣으면 Supabase 함수 `pickle-exchange`의 `PICKLE_API_BASE_URL`·`PICKLE_ENV`도 **같은 서버**로 맞춰야 해요
+(`docs/supabase.md` 5번). 앱은 개발, 함수는 상용처럼 엇갈리면 픽클 로그인 후 기록이 안 올라가요.
 
 | 키 | 뜻 |
 |---|---|

@@ -59,24 +59,42 @@ class TripNoteView extends StatelessWidget {
   Widget build(BuildContext context) {
     final checkIns = page.checkIns;
     final layout = layoutOf(page);
+    final paint = CustomPaint(
+      size: Size(config.pageWidth, layout.pageHeight),
+      painter: _TripNotePainter(
+        trip: trip,
+        page: page,
+        layout: layout,
+        paper: paper,
+        title: _title(),
+        subtitle: _subtitle(),
+        stopEdits: stopEdits,
+      ),
+    );
     return Semantics(
       label: '${_title()} 여행 노트: ${checkIns.map((c) => '${_hm(c.at)} ${c.placeName}').join(', ')}',
-      child: CustomPaint(
-        size: Size(config.pageWidth, layout.pageHeight),
-        painter: _TripNotePainter(
-          trip: trip,
-          page: page,
-          layout: layout,
-          paper: paper,
-          title: _title(),
-          subtitle: _subtitle(),
-          stopEdits: stopEdits,
-        ),
-      ),
+      // 하루 장인데 체크인이 없는 날: 빈 길 위에 안내 한 줄(저장할 때는 빈 날을 뺀다).
+      child: checkIns.isEmpty && _isDayPage
+          ? Stack(
+              children: [
+                paint,
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  top: config.firstRowY + 34,
+                  child: const Text(
+                    '이날은 아직 체크인이 없어요',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF8A86A3)),
+                  ),
+                ),
+              ],
+            )
+          : paint,
     );
   }
 
-  bool get _isDayPage => page.isSingleDay && trip.days.length > 1;
+  bool get _isDayPage => page.dayPage;
 
   String _title() {
     final city = regionShortName(trip.cityName);
@@ -84,13 +102,14 @@ class TripNoteView extends StatelessWidget {
   }
 
   String _subtitle() {
-    if (page.days.isEmpty) return _ymd(trip.startDate);
-    if (_isDayPage || trip.days.length == 1) {
+    // 하루 장: 그날 날짜. 한 장에 모아보기: 정한 기간(2박 3일이면 3일 전체, 체크인이 더 길면 그만큼).
+    if (_isDayPage) {
       final d = page.days.first.date;
-      final suffix = trip.days.length == 1 ? ' · 당일 여행' : '';
-      return '${_ymd(d)} (${_weekdays[d.weekday - 1]})$suffix';
+      return '${_ymd(d)} (${_weekdays[d.weekday - 1]})';
     }
-    return '${_ymd(page.days.first.date)} – ${_md(page.days.last.date)} · ${lengthLabelOf(trip.dayCount)}';
+    final start = dateOnly(trip.startDate);
+    if (trip.totalDays <= 1) return '${_ymd(start)} (${_weekdays[start.weekday - 1]}) · 당일 여행';
+    return '${_ymd(start)} – ${_md(trip.lastDate)} · ${lengthLabelOf(trip.totalDays)}';
   }
 }
 

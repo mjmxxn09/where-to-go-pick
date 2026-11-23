@@ -219,20 +219,25 @@ enum TripCardMode {
 
 /// 한 장(페이지)에 들어갈 내용.
 class TripCardPage {
-  const TripCardPage({required this.days});
+  const TripCardPage({required this.days, this.dayPage = false});
 
   final List<TripDay> days;
+
+  /// 하루씩 나눠보기의 한 장(제목 "강릉 2일차", 그날 날짜). 체크인이 없는 날일 수도 있다.
+  final bool dayPage;
 
   List<CheckIn> get checkIns => [for (final d in days) ...d.checkIns];
   bool get isSingleDay => days.length == 1;
 }
 
-/// 보기 방식에 따라 페이지를 나눈다. 당일 여행은 항상 한 장이다.
+/// 보기 방식에 따라 페이지를 나눈다.
+/// - 한 장에 모아보기: 체크인한 날을 모두 한 장에.
+/// - 하루씩 나눠보기: 여행 기간의 날마다 한 장(정한 기간 기준, 체크인 없는 날도 빈 장으로). 당일 여행은 한 장.
 List<TripCardPage> paginateTrip(Trip trip, TripCardMode mode) {
-  final days = trip.days;
-  if (days.isEmpty) return const [TripCardPage(days: [])];
-  if (mode == TripCardMode.onePage || days.length == 1) return [TripCardPage(days: days)];
-  return [for (final d in days) TripCardPage(days: [d])];
+  if (mode == TripCardMode.perDay && trip.totalDays > 1) {
+    return [for (final d in trip.allDays) TripCardPage(days: [d], dayPage: true)];
+  }
+  return [TripCardPage(days: trip.days)];
 }
 
 /// 장소 이름을 **띄어쓰기 단위로만** 줄바꿈한다("안목 커피거 / 리"가 아니라 "안목 / 커피거리").

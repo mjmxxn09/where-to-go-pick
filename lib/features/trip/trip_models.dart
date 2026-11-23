@@ -200,6 +200,17 @@ class Trip {
 
   int get dayCount => days.isEmpty ? 1 : days.last.index + 1;
 
+  /// 여행 기간의 모든 날(1일차 ~ [totalDays]일차). 체크인이 없는 날도 빈 날로 넣는다.
+  /// 2박 3일로 정했으면 체크인이 하루뿐이어도 3일.
+  List<TripDay> get allDays {
+    final start = dateOnly(startDate);
+    final byIndex = {for (final d in days) d.index: d};
+    return [
+      for (var i = 0; i < totalDays; i++)
+        byIndex[i] ?? TripDay(index: i, date: start.add(Duration(days: i)), checkIns: const []),
+    ];
+  }
+
   /// "당일 여행", "1박 2일", "2박 3일" … 정한 기간이 있으면 그것(체크인이 더 길어지면 그만큼).
   String get lengthLabel => lengthLabelOf(totalDays);
 }

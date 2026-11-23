@@ -157,12 +157,20 @@ class _TripCardScreenState extends State<TripCardScreen> {
     return images;
   }
 
-  /// 갤러리(웹은 다운로드)에 저장. 나눠 보기면 모든 장.
+  /// 갤러리(웹은 다운로드)에 저장. 나눠 보기면 체크인이 있는 모든 장(빈 날은 뺀다).
   Future<void> _saveImages(List<TripCardPage> pages, {required bool folder}) async {
     if (_busy) return;
+    final indexes = [
+      for (var i = 0; i < pages.length; i++)
+        if (!folder || pages[i].checkIns.isNotEmpty) i,
+    ];
+    if (indexes.isEmpty) {
+      _snack('아직 체크인한 날이 없어요.');
+      return;
+    }
     setState(() => _busy = true);
     try {
-      final images = await _capturePages(pages, [for (var i = 0; i < pages.length; i++) i], folder: folder);
+      final images = await _capturePages(pages, indexes, folder: folder);
       await saveCardImages(images);
       if (mounted) _snack(images.length > 1 ? '$cardSaveTarget에 ${images.length}장 저장했어요.' : '$cardSaveTarget에 저장했어요.');
     } on CardSaveException catch (e) {
@@ -322,7 +330,13 @@ class _TripCardScreenState extends State<TripCardScreen> {
                   children: [
                     for (var i = 0; i < pages.length; i++)
                       ChoiceChip(
-                        label: Text(pages[i].days.first.label),
+                        // 체크인이 없는 날은 흐린 글자로(빈 장)
+                        label: Text(
+                          pages[i].days.first.label,
+                          style: pages[i].checkIns.isEmpty && i != index
+                              ? const TextStyle(color: AppColors.textSecondary)
+                              : null,
+                        ),
                         selected: i == index,
                         onSelected: (_) => setState(() => _pageIndex = i),
                       ),
@@ -374,7 +388,9 @@ class _TripCardScreenState extends State<TripCardScreen> {
                         icon: _busy
                             ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
                             : const Icon(Icons.download),
-                        label: Text(_busy ? '만드는 중…' : (folder ? '${pages.length}장 모두 저장' : '이미지 저장')),
+                        label: Text(_busy
+                            ? '만드는 중…'
+                            : (folder ? '${pages.where((p) => p.checkIns.isNotEmpty).length}장 모두 저장' : '이미지 저장')),
                       ),
                     ),
                   ],

@@ -126,7 +126,7 @@ List<String> voteCandidates(
 
 /// 카드 한 장을 가리키는 저장 키.
 String cardPageKey(Trip trip, TripCardMode mode, TripCardPage page) {
-  if (mode == TripCardMode.onePage || trip.days.length <= 1 || page.days.isEmpty) return '${trip.id}:all';
+  if (mode == TripCardMode.onePage || !page.dayPage || page.days.isEmpty) return '${trip.id}:all';
   return '${trip.id}:day${page.days.first.index}';
 }
 

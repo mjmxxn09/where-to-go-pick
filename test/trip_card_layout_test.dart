@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:where_to_go_pick/features/trip/sample_trip.dart';
+import 'package:where_to_go_pick/features/trip/trip_models.dart';
 import 'package:where_to_go_pick/features/trip_card/trip_card_layout.dart';
 
 void main() {
@@ -88,6 +89,41 @@ void main() {
       final pages = paginateTrip(trip, TripCardMode.perDay);
       expect(pages, hasLength(3));
       expect(pages.map((p) => p.checkIns.length), [4, 3, 2]);
+      expect(pages.every((p) => p.dayPage), isTrue);
+    });
+
+    test('2박 3일로 정했으면 체크인이 하루뿐이어도 하루씩 3장(빈 날 포함), 모아보기는 한 장', () {
+      final oneDay = Trip(
+        id: 't',
+        cityId: '32030',
+        cityName: '강릉시',
+        provinceName: '강원특별자치도',
+        startDate: DateTime(2026, 11, 23),
+        plannedDays: 3,
+        checkIns: [
+          CheckIn(id: 'a', placeName: '경포해변', type: PlaceType.beach, at: DateTime(2026, 11, 23, 10)),
+          CheckIn(id: 'b', placeName: '오죽헌', type: PlaceType.heritage, at: DateTime(2026, 11, 23, 13)),
+        ],
+      );
+      expect(oneDay.totalDays, 3);
+      final perDay = paginateTrip(oneDay, TripCardMode.perDay);
+      expect(perDay.map((p) => p.checkIns.length), [2, 0, 0]);
+      expect(perDay.map((p) => p.days.single.label), ['1일차', '2일차', '3일차']);
+      expect(perDay[2].days.single.date, DateTime(2026, 11, 25));
+      final one = paginateTrip(oneDay, TripCardMode.onePage);
+      expect(one.single.checkIns, hasLength(2));
+      expect(one.single.dayPage, isFalse);
+
+      // 당일 여행은 나눠 봐도 한 장
+      final sameDay = Trip(
+        id: 'u',
+        cityId: '32030',
+        cityName: '강릉시',
+        provinceName: '강원특별자치도',
+        startDate: DateTime(2026, 11, 23),
+        checkIns: oneDay.checkIns,
+      );
+      expect(paginateTrip(sameDay, TripCardMode.perDay).single.dayPage, isFalse);
     });
   });
 

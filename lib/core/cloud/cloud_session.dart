@@ -6,6 +6,8 @@ import 'package:crypto/crypto.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 
+import '../network/timeout_client.dart';
+
 /// Supabase에 보낼 토큰과 그 주인.
 class CloudAuth {
   const CloudAuth({required this.accessToken, required this.userId, required this.expiresAt});
@@ -114,7 +116,7 @@ class CloudSession {
         _accountStore = accountStore ?? SecureCloudSecretStore(null, SecureCloudSecretStore.accountKey),
         _accountUsedStore = accountUsedStore ?? SecureCloudSecretStore(null, SecureCloudSecretStore.accountUsedKey),
         _random = random ?? Random.secure(),
-        _http = httpClient ?? http.Client(),
+        _http = httpClient ?? TimeoutClient(),
         _clock = clock ?? DateTime.now;
 
   final Uri baseUri;

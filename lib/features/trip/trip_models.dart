@@ -151,7 +151,10 @@ class Trip {
   /// 출발 전인지(오늘이 출발일보다 앞).
   bool isBeforeStart(DateTime now) => dayIndexOf(now) < 0;
 
-  String get title => '${regionShortName(cityName)} 여행';
+  String get title => '${regionLabel(cityName, provinceName)} 여행';
+
+  /// 화면에 쓰는 지역 이름(강릉, 대전, 대전 중구).
+  String get placeLabel => regionLabel(cityName, provinceName);
 
   /// 시·군·구를 고르지 않고 도·광역시 전체로 만든 여행(cityId가 도 코드 두 자리).
   bool get isWholeProvince => isProvinceId(cityId);
@@ -248,7 +251,22 @@ const provinceShortNames = <String, String>{
 };
 
 /// 제목에 쓰는 짧은 지역 이름: 도·광역시는 짧은 이름, 시·군·구는 끝 글자를 뗀다(강릉시 → 강릉).
-String regionShortName(String name) => provinceShortNames[name] ?? name.replaceAll(RegExp(r'(시|군|구)$'), '');
+/// 떼면 한 글자만 남는 이름(중구·동구·남구…)은 그대로 둔다.
+String regionShortName(String name) {
+  final province = provinceShortNames[name];
+  if (province != null) return province;
+  final short = name.replaceAll(RegExp(r'(시|군|구)$'), '');
+  return short.length < 2 ? name : short;
+}
+
+/// 화면에 쓰는 지역 이름. 여러 도시에 같은 이름이 있는 두 글자 구(중구·동구·서구·남구·북구)는
+/// 도·광역시 이름을 붙인다: "대전 중구", "부산 중구". 나머지는 [regionShortName].
+String regionLabel(String name, String provinceName) {
+  if (name.length <= 2 && name.endsWith('구') && provinceName.isNotEmpty && provinceName != name) {
+    return '${regionShortName(provinceName)} $name';
+  }
+  return regionShortName(name);
+}
 
 /// [all] 가운데 [ids]에 든 것만 [ids] 순서로 바꾼다. 그 장소들이 있던 자리에 차례로 넣고, 나머지는 자리 그대로.
 /// [ids]가 [all]에 없는 id를 담고 있거나 겹치면 바꾸지 않는다(같은 목록을 돌려준다).

@@ -199,7 +199,8 @@ class _StartGateState extends State<StartGate> {
     var signedIn = false;
     if (!scope.config.usePickleFixtures) {
       try {
-        signedIn = await scope.pickle.me() != null;
+        // 서버가 늦으면 오래 기다리지 않고 로그인 화면부터(스플래시가 멈춘 것처럼 보이지 않게).
+        signedIn = await scope.pickle.me().timeout(const Duration(seconds: 8)) != null;
       } on Object {
         signedIn = false; // 세션이 만료됐거나 서버에 닿지 않으면 로그인부터
       }
@@ -207,7 +208,7 @@ class _StartGateState extends State<StartGate> {
     // 카카오로 로그인해 둔 적이 있으면 바로 들어간다(세션이 만료됐으면 첫 동기화 때 게스트·폰 저장으로 돌아간다).
     if (!signedIn) {
       try {
-        signedIn = await scope.cloud?.session.hasAccount ?? false;
+        signedIn = await (scope.cloud?.session.hasAccount ?? Future.value(false)).timeout(const Duration(seconds: 5));
       } on Object {
         signedIn = false;
       }
@@ -276,7 +277,12 @@ class _StartGateState extends State<StartGate> {
   /// 로그아웃: 못 올린 기록을 먼저 올려 보고, 서버 세션을 폐기한 뒤 이 폰의 기록을 비우고 시작 화면으로.
   Future<void> _signOut() async {
     final scope = AppScope.of(context);
-    await scope.trip.sync();
+    // 인터넷이 안 되면 오래 붙잡지 않는다(못 올린 게 남으면 아래에서 알려 준다).
+    try {
+      await scope.trip.sync().timeout(const Duration(seconds: 8));
+    } on TimeoutException {
+      debugPrint('로그아웃 전 동기화가 늦어요');
+    }
     if (!mounted) return;
     final pending = !scope.trip.allSynced;
     final ok = await showDialog<bool>(

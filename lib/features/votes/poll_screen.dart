@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../app/app_scope.dart';
 import '../../core/theme/app_surfaces.dart';
@@ -40,23 +41,65 @@ class _PollScreenState extends State<PollScreen> {
   Future<void> _vote(String key) async {
     final poll = _poll;
     if (poll == null || poll.closed) return;
-    final next = await AppScope.of(context).votes.vote(poll.id, key);
-    if (mounted) setState(() => _poll = next);
+    try {
+      final next = await AppScope.of(context).votes.vote(poll.id, key);
+      if (mounted) setState(() => _poll = next);
+    } on Object catch (e) {
+      debugPrint('투표 실패: $e');
+      _snack('표를 넣지 못했어요. 잠시 뒤 다시 해 주세요.');
+    }
   }
 
+  /// 마감은 되돌릴 수 없어서 한 번 묻는다.
   Future<void> _close() async {
     final poll = _poll;
     if (poll == null) return;
-    final next = await AppScope.of(context).votes.close(poll.id);
-    if (mounted) setState(() => _poll = next);
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('지금 마감할까요?'),
+        content: Text('마감하면 더 투표할 수 없어요. 지금은 ${poll.leader.label} 1위 · ${poll.total}명 투표.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('더 기다리기')),
+          FilledButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('마감하기')),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    try {
+      final next = await AppScope.of(context).votes.close(poll.id);
+      if (mounted) setState(() => _poll = next);
+    } on Object catch (e) {
+      debugPrint('마감 실패: $e');
+      _snack('마감하지 못했어요. 잠시 뒤 다시 해 주세요.');
+    }
   }
 
-  Future<void> _copyLink() async {
+  /// 공유 시트로 질문 + 링크 보내기(카톡 등). 공유 시트를 못 열면 링크를 복사한다.
+  Future<void> _share(Rect? origin) async {
     final poll = _poll;
     if (poll == null) return;
-    await Clipboard.setData(ClipboardData(text: poll.shareUrl));
+    if (AppScope.of(context).votes.isSample) {
+      // 예시 투표의 링크는 열리지 않는 주소라 친구한테 보내지 않는다.
+      _snack('아직 예시 투표예요. 픽클 투표 서버가 붙으면 친구한테 링크로 보낼 수 있어요.');
+      return;
+    }
+    try {
+      await SharePlus.instance.share(ShareParams(
+        text: '${poll.question}\n투표해 줘! ${poll.shareUrl}',
+        subject: poll.question,
+        sharePositionOrigin: origin,
+      ));
+    } on Object catch (e) {
+      debugPrint('공유 시트 실패, 링크 복사: $e');
+      await Clipboard.setData(ClipboardData(text: poll.shareUrl));
+      _snack('투표 링크를 복사했어요. 친구한테 보내 주세요!');
+    }
+  }
+
+  void _snack(String text) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('투표 링크를 복사했어요. 친구한테 보내 주세요!')));
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text), persist: false));
   }
 
   @override
@@ -89,6 +132,10 @@ class _PollScreenState extends State<PollScreen> {
           child: ListView(
             padding: const EdgeInsets.fromLTRB(Gap.m, Gap.s, Gap.m, Gap.m),
             children: [
+              if (AppScope.of(context).votes.isSample) ...[
+                const _SampleNote(),
+                const SizedBox(height: Gap.s),
+              ],
               if (poll.closed) _WinnerCard(poll: poll, winner: winner) else _QuestionCard(poll: poll),
               const SizedBox(height: Gap.s + 4),
               for (final (i, o) in poll.ranked.indexed) ...[
@@ -127,10 +174,21 @@ class _PollScreenState extends State<PollScreen> {
               : Row(
                   children: [
                     Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: _copyLink,
-                        icon: const Icon(Icons.link),
-                        label: const Text('링크 복사'),
+                      child: Builder(
+                        builder: (context) => OutlinedButton.icon(
+                          onPressed: () {
+                            final box = context.findRenderObject() as RenderBox?;
+                            _share(box == null ? null : box.localToGlobal(Offset.zero) & box.size);
+                          },
+                          onLongPress: AppScope.of(context).votes.isSample
+                              ? null
+                              : () async {
+                                  await Clipboard.setData(ClipboardData(text: poll.shareUrl));
+                                  _snack('투표 링크를 복사했어요.');
+                                },
+                          icon: const Icon(Icons.ios_share),
+                          label: const Text('친구한테 보내기'),
+                        ),
                       ),
                     ),
                     const SizedBox(width: Gap.s),
@@ -295,4 +353,27 @@ class _OptionCard extends StatelessWidget {
       ),
     );
   }
+}
+
+/// 예시 투표 안내(픽클 투표 서버가 붙기 전).
+class _SampleNote extends StatelessWidget {
+  const _SampleNote();
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(color: const Color(0xFFFFF4D6), borderRadius: BorderRadius.circular(14)),
+        child: const Row(
+          children: [
+            Icon(Icons.info_outline, size: 18, color: Color(0xFF8A6200)),
+            SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                '예시 투표예요. 친구 표는 화면 확인용이고, 앱을 다시 켜면 사라져요. 픽클 투표 서버가 붙으면 진짜로 물어볼 수 있어요.',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF6B4C00)),
+              ),
+            ),
+          ],
+        ),
+      );
 }

@@ -116,6 +116,9 @@ class Poll {
 typedef PollCandidate = ({String key, String label});
 
 abstract interface class VoteRepository {
+  /// 서버 없이 예시로만 도는지. 예시면 친구 표·포인트·공유 링크가 진짜가 아니라서 화면이 그렇다고 알린다.
+  bool get isSample;
+
   /// 체크인 직후 질문에 답한다. 고른 곳에 "다녀온 사람 표"가 들어간다. 받은 픽클 포인트를 돌려준다.
   Future<int> answerPair({required String cityId, required String winnerPlaceId, required String otherPlaceId});
 
@@ -144,6 +147,9 @@ class FixtureVoteRepository implements VoteRepository {
 
   /// 체크인 질문 한 번에 주는 포인트(예시 값, 픽클 정책으로 정한다).
   final int pointsPerAnswer;
+
+  @override
+  bool get isSample => true;
 
   final Map<String, Set<String>> _placeVotes = {};
   final Map<String, Poll> _polls = {};

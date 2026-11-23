@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../app/app_scope.dart';
 import '../../core/life/life_repository.dart';
+import '../../core/text/josa.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/votes/vote_repository.dart';
 import '../korea_map/korea_map_data.dart';
@@ -56,14 +57,24 @@ class _ExploreScreenState extends State<ExploreScreen> {
 
   bool _isCandidate(SelectedCity c) => _cands?.contains(c.id) ?? false;
 
-  void _toggleCandidate(SelectedCity c) => _cands?.toggle(c);
+  void _toggleCandidate(SelectedCity c) {
+    final dropped = _cands?.toggle(c);
+    if (dropped == null) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(
+        content: Text('후보는 ${TripCandidates.maxCandidates}곳까지예요. 먼저 담은 ${withEun(regionLabel(dropped.name, dropped.provinceName))} 뺐어요.'),
+        duration: const Duration(seconds: 3),
+        persist: false,
+      ));
+  }
 
   /// 질문을 고르거나 직접 써서(기본: "강릉 vs 속초, 어디 갈까?") 투표를 만든다.
   Future<void> _askFriends() async {
     final store = _cands;
     if (store == null) return;
     final picked = List.of(store.items);
-    final names = [for (final c in picked) regionShortName(c.name)];
+    final names = [for (final c in picked) regionLabel(c.name, c.provinceName)];
     final question = await showPollQuestionSheet(
       context,
       initial: defaultRegionQuestion(names),
@@ -90,7 +101,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
             winnerAction: cities.isEmpty
                 ? null
                 : (
-                    label: (w) => '${w.label}로 여행 만들기',
+                    label: (w) => '${withRo(w.label)} 여행 만들기',
                     onPressed: (w) {
                       Navigator.of(routeContext).pop();
                       final city = cities.firstWhere((c) => c.id == w.key, orElse: () => cities.first);
@@ -116,7 +127,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
     if (city == null) return;
     final trips = AppScope.of(context).trip;
     final current = trips.trip;
-    final title = '${regionShortName(city.name)} 여행 만들기';
+    final title = '${regionLabel(city.name, city.provinceName)} 여행 만들기';
     final dates = await showTripDatesSheet(
       context,
       title: title,
@@ -137,7 +148,9 @@ class _ExploreScreenState extends State<ExploreScreen> {
     final store = _cands;
     final removed = store != null && store.contains(city.id) ? store.clear() : const <SelectedCity>[];
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(removed.isEmpty ? '${city.name} 여행을 만들었어요!' : '${city.name} 여행을 만들었어요! 갈까 말까 후보는 비웠어요'),
+      content: Text(removed.isEmpty
+          ? '${regionLabel(city.name, city.provinceName)} 여행을 만들었어요!'
+          : '${regionLabel(city.name, city.provinceName)} 여행을 만들었어요! 갈까 말까 후보는 비웠어요'),
       duration: const Duration(seconds: 4),
       persist: false,
       action: removed.isEmpty || store == null
@@ -179,7 +192,12 @@ class _ExploreScreenState extends State<ExploreScreen> {
             onToggleCandidate: () => _toggleCandidate(_city!),
           ),
         const SizedBox(height: Gap.s),
-        _CandidateBar(candidates: _cands?.items ?? const [], onAsk: _askFriends),
+        _CandidateBar(
+          candidates: _cands?.items ?? const [],
+          onAsk: _askFriends,
+          onOpen: (c) => setState(() => _city = c),
+          onRemove: (c) => _cands?.remove(c.id),
+        ),
         if (_cands?.polls.firstOrNull case final asked?) ...[
           const SizedBox(height: Gap.s),
           _RecentPoll(
@@ -310,7 +328,7 @@ class _RecentPoll extends StatelessWidget {
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        p.closed ? '지난번 투표 · $lead로 정해졌어요' : '친구들 답 기다리는 중 · 지금은 $lead 1위 · ${p.total}명',
+                        p.closed ? '${p.question} · ${withRo(lead)} 정해졌어요' : '${p.question} · 지금은 $lead 1위 · ${p.total}명',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
@@ -327,55 +345,83 @@ class _RecentPoll extends StatelessWidget {
 }
 
 /// 담은 후보 줄. 2곳부터 "친구한테 물어보기"(픽클 투표로 공유).
+/// 후보 칩을 누르면 지도에서 그 지역을 고르고, ✕로 하나씩 뺀다.
 class _CandidateBar extends StatelessWidget {
-  const _CandidateBar({required this.candidates, required this.onAsk});
+  const _CandidateBar({required this.candidates, required this.onAsk, required this.onOpen, required this.onRemove});
 
   final List<SelectedCity> candidates;
   final VoidCallback onAsk;
+  final ValueChanged<SelectedCity> onOpen;
+  final ValueChanged<SelectedCity> onRemove;
 
   @override
   Widget build(BuildContext context) {
-    final names = candidates.map((c) => regionShortName(c.name)).join(' · ');
     final n = candidates.length;
     return Container(
       constraints: const BoxConstraints(minHeight: 52),
-      padding: const EdgeInsets.fromLTRB(14, 4, 5, 4),
-      decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.75), borderRadius: BorderRadius.circular(99)),
-      child: Row(
+      padding: const EdgeInsets.fromLTRB(14, 6, 5, 6),
+      decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.75), borderRadius: BorderRadius.circular(22)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(n == 0 ? Icons.favorite_border : Icons.favorite, size: 20, color: _heart),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(n == 0 ? '고민되면 ♡로 후보에 담아요' : '갈까 말까 후보 $n곳',
-                    style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800)),
-                Text(
-                  n == 0
-                      ? '2곳부터 친구한테 투표로 물어볼 수 있어요'
-                      : n == 1
-                          ? '$names · 하나 더 담으면 물어볼 수 있어요'
-                          : names,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: AppColors.textSecondary),
+          Row(
+            children: [
+              Icon(n == 0 ? Icons.favorite_border : Icons.favorite, size: 20, color: _heart),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(n == 0 ? '고민되면 ♡로 후보에 담아요' : '갈까 말까 후보 $n곳',
+                        style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800)),
+                    Text(
+                      n == 0
+                          ? '2곳부터 친구한테 투표로 물어볼 수 있어요'
+                          : n == 1
+                              ? '하나 더 담으면 물어볼 수 있어요'
+                              : '누르면 지도에서 보여요 · 최대 ${TripCandidates.maxCandidates}곳',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: AppColors.textSecondary),
+                    ),
+                  ],
                 ),
+              ),
+              if (n >= 2)
+                FilledButton.tonal(
+                  onPressed: onAsk,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: AppColors.primaryDeep,
+                    minimumSize: const Size(0, 42),
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                  ),
+                  child: const Text('친구한테 물어보기'),
+                ),
+            ],
+          ),
+          if (n > 0) ...[
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 6,
+              runSpacing: 4,
+              children: [
+                for (final c in candidates)
+                  InputChip(
+                    label: Text(regionLabel(c.name, c.provinceName)),
+                    onPressed: () => onOpen(c),
+                    onDeleted: () => onRemove(c),
+                    deleteButtonTooltipMessage: '후보에서 빼기',
+                    visualDensity: VisualDensity.compact,
+                    backgroundColor: const Color(0xFFFFF0F6),
+                    side: const BorderSide(color: Color(0xFFFFD3E5)),
+                    labelStyle: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: Color(0xFFA3245F)),
+                  ),
               ],
             ),
-          ),
-          if (n >= 2)
-            FilledButton.tonal(
-              onPressed: onAsk,
-              style: FilledButton.styleFrom(
-                backgroundColor: Colors.white,
-                foregroundColor: AppColors.primaryDeep,
-                minimumSize: const Size(0, 42),
-                padding: const EdgeInsets.symmetric(horizontal: 14),
-              ),
-              child: const Text('친구한테 물어보기'),
-            ),
+          ],
         ],
       ),
     );

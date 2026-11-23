@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../app/app_scope.dart';
 import '../../core/pickle/pickle_models.dart';
+import '../../core/text/josa.dart';
 import '../../core/theme/app_surfaces.dart';
 import '../../core/theme/app_theme.dart';
 import '../korea_map/korea_map_data.dart';
@@ -108,7 +109,7 @@ class _MyMapScreenState extends State<MyMapScreen> {
                   FutureBuilder<PickleFriend?>(
                     future: _friend,
                     builder: (context, snap) => Text(
-                      snap.data == null ? '픽클 친구랑 다닌 곳' : '${snap.data!.name}랑 다닌 곳',
+                      snap.data == null ? '픽클 친구랑 다닌 곳' : '${withRang(snap.data!.name)} 다닌 곳',
                       style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.textSecondary),
                     ),
                   ),
@@ -141,7 +142,7 @@ class _MyMapScreenState extends State<MyMapScreen> {
           ],
         ),
         const SizedBox(height: Gap.s + 4),
-        _ProgressCard(painted: paintedProvinces),
+        _ProgressCard(painted: paintedProvinces, cities: visited.where((id) => !isProvinceId(id)).length),
         const SizedBox(height: Gap.s + 4),
         DecoratedBox(
           decoration: const BoxDecoration(
@@ -226,9 +227,12 @@ class _MyMapScreenState extends State<MyMapScreen> {
 }
 
 class _ProgressCard extends StatelessWidget {
-  const _ProgressCard({required this.painted});
+  const _ProgressCard({required this.painted, required this.cities});
 
   final int painted;
+
+  /// 체크인한 시·군·구 수(도 전체 여행은 빼고).
+  final int cities;
 
   @override
   Widget build(BuildContext context) {
@@ -250,7 +254,8 @@ class _ProgressCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('시·도를 색칠했어요', style: TextStyle(fontWeight: FontWeight.w700)),
+                Text(cities > 0 ? '시·도를 색칠했어요 · 시·군·구 $cities곳' : '시·도를 색칠했어요',
+                    style: const TextStyle(fontWeight: FontWeight.w700)),
                 const SizedBox(height: 8),
                 ClipRRect(
                   borderRadius: BorderRadius.circular(99),

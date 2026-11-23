@@ -46,15 +46,24 @@ class TripCandidates extends ChangeNotifier {
 
   bool contains(String cityId) => _items.any((c) => c.id == cityId);
 
-  /// 담기/빼기. 다섯 번째를 담으면 가장 먼저 담은 후보가 빠진다.
-  void toggle(SelectedCity city) {
+  /// 담기/빼기. 다섯 번째를 담으면 가장 먼저 담은 후보가 빠진다 — 그 후보를 돌려준다(알림용).
+  SelectedCity? toggle(SelectedCity city) {
+    SelectedCity? dropped;
     if (contains(city.id)) {
       _items.removeWhere((c) => c.id == city.id);
     } else {
       _items.add(city);
-      if (_items.length > maxCandidates) _items.removeAt(0);
+      if (_items.length > maxCandidates) dropped = _items.removeAt(0);
     }
     _changed();
+    return dropped;
+  }
+
+  /// 후보 하나 빼기(후보 줄의 ✕).
+  void remove(String cityId) {
+    final before = _items.length;
+    _items.removeWhere((c) => c.id == cityId);
+    if (_items.length != before) _changed();
   }
 
   /// 후보를 모두 비우고, 되돌릴 수 있게 비운 목록을 돌려준다.

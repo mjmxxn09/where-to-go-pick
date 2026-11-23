@@ -32,6 +32,11 @@ class TripController extends ChangeNotifier {
   Future<void>? _syncing;
   bool _disposed = false;
 
+  /// 올릴 여행(여행 id → 가장 최근 상태). 한 번에 하나씩, 순서대로 올려서
+  /// 늦게 끝난 옛 상태가 새 상태를 서버에서 덮어쓰지 않게 한다(☆를 빠르게 여러 번 눌러도).
+  final Map<String, Trip> _pushQueue = {};
+  Future<void>? _pushing;
+
   Trip? get trip => _trip;
 
   /// 저장된 모든 여행(진행 중 포함, 예시 여행 제외), 시작일 최신순.
@@ -77,12 +82,15 @@ class TripController extends ChangeNotifier {
   }
 
   /// 서버와 다 맞췄는지(못 올린 기록·못 지운 것이 없는지). 로그아웃 전에 본다.
-  bool get allSynced => !_needsPush && _deletedTrips.isEmpty && _deletedCheckIns.isEmpty;
+  bool get allSynced =>
+      !_needsPush && _pushQueue.isEmpty && _pushing == null && _deletedTrips.isEmpty && _deletedCheckIns.isEmpty;
 
   /// 로그아웃: 이 폰의 여행 기록을 비운다(서버 기록은 그대로 — 다시 로그인하면 받아 온다).
   /// 같은 폰에서 다른 사람이 로그인했을 때 앞사람 기록이 그 계정으로 올라가지 않게.
   Future<void> clearLocal() async {
     await _syncing;
+    await _pushing;
+    _pushQueue.clear();
     _trips = const [];
     _trip = null;
     _deletedTrips = {};
@@ -128,10 +136,14 @@ class TripController extends ChangeNotifier {
         await _save();
       }
       // 서버에 없는 여행·체크인이 있으면 올린다(순서만 달라도 올리지만 덮어쓰기라 괜찮다).
+      // 바로 올리는 것과 같은 줄에 세워 순서를 지킨다. 실패하면 줄이 _needsPush를 다시 켠다.
       if (_needsPush || !_sameTrips(merged, remote)) {
-        await cloud.push(_trips);
+        _needsPush = false;
+        for (final t in _trips) {
+          _pushQueue.putIfAbsent(t.id, () => t);
+        }
+        await _drain(cloud);
       }
-      _needsPush = false;
     } on Object catch (e) {
       _needsPush = true;
       debugPrint('여행 기록을 서버와 맞추지 못했어요(폰에는 남아 있어요): $e');
@@ -333,10 +345,29 @@ class TripController extends ChangeNotifier {
     unawaited(_save());
     final cloud = _cloud;
     if (cloud == null) return;
-    unawaited(cloud.push([trip]).then((_) {}, onError: (Object e) {
-      _needsPush = true;
-      debugPrint('여행 기록을 올리지 못했어요(폰에는 남아 있어요): $e');
-    }));
+    _pushQueue[trip.id] = trip;
+    unawaited(_drain(cloud));
+  }
+
+  /// 줄에 선 여행을 하나씩 올린다. 이미 올리는 중이면 그 일이 끝까지 비운다.
+  Future<void> _drain(TripCloud cloud) {
+    return _pushing ??= () async {
+      try {
+        while (_pushQueue.isNotEmpty && !_disposed) {
+          final batch = _pushQueue.values.toList();
+          _pushQueue.clear();
+          try {
+            await cloud.push(batch);
+          } on Object catch (e) {
+            _needsPush = true;
+            debugPrint('여행 기록을 올리지 못했어요(폰에는 남아 있어요): $e');
+            return;
+          }
+        }
+      } finally {
+        _pushing = null;
+      }
+    }();
   }
 
   void _flushSoon() {
@@ -395,11 +426,29 @@ bool _sameTrips(List<Trip> a, List<Trip> b) {
     if (a[i].id != b[i].id ||
         a[i].checkIns.length != b[i].checkIns.length ||
         a[i].planned.length != b[i].planned.length ||
+        !_samePlanned(a[i].planned, b[i].planned) ||
+        !_sameCheckIns(a[i].checkIns, b[i].checkIns) ||
         a[i].endedAt != b[i].endedAt ||
         a[i].plannedDays != b[i].plannedDays ||
         a[i].startDate != b[i].startDate) {
       return false;
     }
+  }
+  return true;
+}
+
+/// 가볼 곳의 순서·날까지 같은지(순서만 바꿔도 서버에 다시 올리게).
+bool _samePlanned(List<PlannedPlace> a, List<PlannedPlace> b) {
+  for (var i = 0; i < a.length; i++) {
+    if (a[i].id != b[i].id || a[i].day != b[i].day) return false;
+  }
+  return true;
+}
+
+/// 체크인 시각까지 같은지(시각을 고친 것도 올리게).
+bool _sameCheckIns(List<CheckIn> a, List<CheckIn> b) {
+  for (var i = 0; i < a.length; i++) {
+    if (a[i].id != b[i].id || a[i].at != b[i].at) return false;
   }
   return true;
 }

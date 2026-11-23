@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 
+import '../../core/text/josa.dart';
 import '../../core/theme/app_theme.dart';
 import '../splash/splash_character.dart';
+
+export '../../core/text/josa.dart' show withRang;
 
 /// 체크인 직후 픽클이가 말풍선으로 하나 묻는다: "방금 간 곳 vs 그 전에 간 곳, 어디가 더 좋았어?"
 /// 고른 답은 픽클의 "다녀온 사람 표"가 된다. 답하면 고맙다는 말과 받은 포인트를 보여 준다.
@@ -185,12 +188,4 @@ class _TailPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
-
-/// "경포해변" → "경포해변이랑", "안목 커피거리" → "안목 커피거리랑" (받침 있으면 '이랑').
-String withRang(String word) {
-  if (word.isEmpty) return word;
-  final c = word.codeUnitAt(word.length - 1) - 0xAC00;
-  final hasBatchim = c >= 0 && c <= 11171 && c % 28 != 0;
-  return '$word${hasBatchim ? '이랑' : '랑'}';
 }

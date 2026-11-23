@@ -135,7 +135,8 @@ class _TripScreenState extends State<TripScreen> {
     final now = DateTime.now();
     final pick = weatherPickFor(trip, _dayInRange(trip, _planDay), now);
     final date = pick.date;
-    final key = '${trip.cityId}|${date ?? pick.note}';
+    // 오늘이면 시각도 키에 넣어, 화면을 오래 켜 둬도 한 시간마다 지금 날씨를 새로 받는다.
+    final key = '${trip.cityId}|${date ?? pick.note}|${pick.isToday ? now.hour : ''}';
     if (_weatherKey == key) return;
     _weatherKey = key;
     _weatherPick = pick;
@@ -222,11 +223,23 @@ class _TripScreenState extends State<TripScreen> {
     final winner = justWon ? ask.just : ask.other;
     final loser = justWon ? ask.other : ask.just;
     setState(() => _picked = winner.placeName);
-    final points = await AppScope.of(context)
-        .votes
-        .answerPair(cityId: cityId, winnerPlaceId: winner.id, otherPlaceId: loser.id);
+    final int points;
+    try {
+      points = await AppScope.of(context)
+          .votes
+          .answerPair(cityId: cityId, winnerPlaceId: winner.id, otherPlaceId: loser.id);
+    } on Object catch (e) {
+      debugPrint('픽클이 질문 답을 못 보냈어요: $e');
+      if (mounted && identical(_ask, ask)) {
+        setState(() => _ask = null);
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('답을 보내지 못했어요. 인터넷이 되면 다음 체크인 때 다시 물어볼게요.'), persist: false));
+      }
+      return;
+    }
     if (!mounted || !identical(_ask, ask)) return;
-    setState(() => _points = points);
+    // 예시 투표(픽클 서버 전)면 포인트는 진짜가 아니라 보여 주지 않는다.
+    setState(() => _points = AppScope.of(context).votes.isSample ? null : points);
     // 답하고 나면 "고마워 +10P"를 잠깐 보여 주고 닫는다(계속 떠 있으면 아래 목록을 가린다).
     await Future<void>.delayed(const Duration(milliseconds: 1800));
     if (mounted && identical(_ask, ask)) setState(() => _ask = null);
@@ -366,7 +379,7 @@ class _TripScreenState extends State<TripScreen> {
           PlannedMap(
             mapData: AppScope.of(context).mapData,
             cityId: trip.cityId,
-            title: '${regionShortName(trip.cityName)} · ${day == null ? '가볼 곳 전체' : '${day + 1}일차 가볼 곳'}',
+            title: '${trip.placeLabel} · ${day == null ? '가볼 곳 전체' : '${day + 1}일차 가볼 곳'}',
             connect: day != null,
             pins: [
               for (final (i, p) in list.indexed)
@@ -524,9 +537,20 @@ class _TripScreenState extends State<TripScreen> {
             icon: Icons.flight_takeoff,
             text: '출발 ${trip.statusOn(now)} · 가볼 곳을 미리 담아 둬요. 체크인은 ${monthDayLabel(trip.startDate)}부터 할 수 있어요.',
           ),
+        ] else if (isPastPlannedEnd(trip, now)) ...[
+          // 정한 기간이 지났는데 여행 중으로 남아 있으면: 마칠지, 기간을 늘릴지.
+          const SizedBox(height: Gap.s),
+          _Notice(
+            icon: Icons.event_available_outlined,
+            text: '정한 기간(${monthDayLabel(trip.lastDate)}까지)이 지났어요. 다 다녀왔으면 여행을 마치고, 더 있으면 기간을 늘려요.',
+            actions: [
+              TextButton(onPressed: () => _editDates(controller, trip), child: const Text('기간 늘리기')),
+              FilledButton(onPressed: () => _endTrip(controller, trip), child: const Text('여행 마치기')),
+            ],
+          ),
         ],
         const SizedBox(height: Gap.s + 4),
-        _WeatherCard(future: _weather, pick: _weatherPick),
+        _WeatherCard(future: _weather, pick: _weatherPick, onRetry: () => setState(() => _weatherKey = null)),
         const SizedBox(height: Gap.s + 4),
         ..._plannedSection(context, controller, trip),
         const SizedBox(height: Gap.m),
@@ -539,7 +563,11 @@ class _TripScreenState extends State<TripScreen> {
               return const Padding(padding: EdgeInsets.all(Gap.m), child: LinearProgressIndicator());
             }
             if (snap.hasError) {
-              return _LoadProblem(message: '인기 장소를 불러오지 못했어요.', onRetry: () => setState(() => _loadedCity = null));
+              // 다시 받기만 한다(고른 날·검색어는 그대로).
+              return _LoadProblem(
+                message: '인기 장소를 불러오지 못했어요.',
+                onRetry: () => setState(() => _popular = AppScope.of(context).life.popular(cityId: trip.cityId)),
+              );
             }
             final popular = snap.data;
             final sections = popular?.sections ?? const <PlaceSection>[];
@@ -679,10 +707,11 @@ WeatherPick weatherPickFor(Trip trip, int? day, DateTime now) {
 }
 
 class _WeatherCard extends StatelessWidget {
-  const _WeatherCard({required this.future, required this.pick});
+  const _WeatherCard({required this.future, required this.pick, this.onRetry});
 
   final Future<DayWeather>? future;
   final WeatherPick? pick;
+  final VoidCallback? onRetry;
 
   static const _sub = TextStyle(fontSize: 12, color: AppColors.textSecondary);
 
@@ -708,7 +737,16 @@ class _WeatherCard extends StatelessWidget {
                     child: pick?.note != null
                         ? Text(pick!.note!, textAlign: TextAlign.center, style: const TextStyle(color: AppColors.textSecondary))
                         : snap.hasError
-                            ? const Text('그날 예보가 아직 없거나 불러오지 못했어요.', style: TextStyle(color: AppColors.textSecondary))
+                            ? Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Flexible(
+                                    child: Text('그날 예보가 아직 없거나 불러오지 못했어요.',
+                                        style: TextStyle(color: AppColors.textSecondary)),
+                                  ),
+                                  if (onRetry != null) TextButton(onPressed: onRetry, child: const Text('다시 시도')),
+                                ],
+                              )
                             : const CircularProgressIndicator(),
                   ),
                 )
@@ -1102,7 +1140,8 @@ class _Timeline extends StatelessWidget {
         const Text('체크인 기록 (시간순 · 눌러서 고치기)', style: TextStyle(fontWeight: FontWeight.w700)),
         const SizedBox(height: Gap.s),
         for (final day in trip.days) ...[
-          Text(day.label, style: const TextStyle(fontFamily: AppFonts.title, color: AppColors.primaryDeep)),
+          Text('${day.label} · ${monthDayLabel(day.date)}',
+              style: const TextStyle(fontFamily: AppFonts.title, color: AppColors.primaryDeep)),
           for (final c in day.checkIns)
             InkWell(
               onTap: () => onTap(c),
@@ -1262,26 +1301,43 @@ class _DayStrip extends StatelessWidget {
 
 /// 아이콘 + 한두 줄 안내(출발 전 등).
 class _Notice extends StatelessWidget {
-  const _Notice({required this.icon, required this.text});
+  const _Notice({required this.icon, required this.text, this.actions = const []});
 
   final IconData icon;
   final String text;
+
+  /// 아래 오른쪽 버튼들(없으면 안내만).
+  final List<Widget> actions;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(color: AppColors.primaryContainer, borderRadius: BorderRadius.circular(16)),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          Icon(icon, size: 20, color: AppColors.primaryDeep),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(text, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.primaryDeep)),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(icon, size: 20, color: AppColors.primaryDeep),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(text,
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.primaryDeep)),
+              ),
+            ],
           ),
+          if (actions.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Wrap(spacing: 6, children: actions),
+          ],
         ],
       ),
     );
   }
 }
+
+/// 정한 기간이 있고, 오늘이 마지막 날보다 뒤인지(여행 마치기를 권할 때).
+bool isPastPlannedEnd(Trip trip, DateTime now) =>
+    trip.plannedDays != null && !trip.isEnded && daysBetween(trip.lastDate, now) > 0;

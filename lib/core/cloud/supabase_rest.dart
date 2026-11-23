@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../network/timeout_client.dart';
 import 'cloud_session.dart';
 
 /// 로그인 수단이 없어서(픽클 로그인 전 등) 서버에 올릴 수 없다.
@@ -24,7 +25,7 @@ class CloudRequestException implements Exception {
 
 /// Supabase Data API(PostgREST)를 `http`로 직접 부른다. 필요한 것만: 읽기와 upsert.
 class SupabaseRest {
-  SupabaseRest(this.session, {http.Client? httpClient}) : _http = httpClient ?? http.Client();
+  SupabaseRest(this.session, {http.Client? httpClient}) : _http = httpClient ?? TimeoutClient();
 
   final CloudSession session;
   final http.Client _http;

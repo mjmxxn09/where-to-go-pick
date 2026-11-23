@@ -75,6 +75,21 @@ class _KoreaMapViewState extends State<KoreaMapView> {
     _city = city == null || city == _province ? null : city;
   }
 
+  /// 바깥에서 고른 곳이 바뀌면(후보 칩, 투표 1위로 여행 만들기) 지도도 그곳으로.
+  @override
+  void didUpdateWidget(KoreaMapView old) {
+    super.didUpdateWidget(old);
+    final province = widget.initialProvince;
+    final city = widget.initialCity;
+    if (province == old.initialProvince && city == old.initialCity) return;
+    final nextCity = city == null || city == province ? null : city;
+    if (province == _province && nextCity == _city) return;
+    setState(() {
+      _province = province;
+      _city = nextCity;
+    });
+  }
+
   bool _provinceVisited(String code) => widget.visitedCityIds.any((id) => id.startsWith(code));
 
   void _goOverview() {

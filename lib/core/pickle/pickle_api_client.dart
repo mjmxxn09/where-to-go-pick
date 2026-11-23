@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 
 import '../auth/token_store.dart';
 import '../network/api_exception.dart';
+import '../network/timeout_client.dart';
 import 'pickle_models.dart';
 
 /// 픽클(VoteLock) Backend `/v1` 클라이언트. 이 앱은 읽기 위주로 쓴다.
@@ -22,7 +23,7 @@ class PickleApiClient {
     this.deviceId,
   })  : _baseUri = Uri.parse(baseUrl.endsWith('/') ? baseUrl.substring(0, baseUrl.length - 1) : baseUrl),
         _tokens = tokenStore,
-        _http = httpClient ?? http.Client();
+        _http = httpClient ?? TimeoutClient();
 
   final Uri _baseUri;
   final TokenStore _tokens;

@@ -32,7 +32,9 @@ void main() {
     final far = weatherPickFor(_trip(DateTime(2026, 11, 28)), null, now);
     expect(far.date, isNull);
     expect(far.note, contains('3일 전부터'));
-    expect(weatherPickFor(_trip(DateTime(2026, 11, 25)), 2, now).date, DateTime(2026, 11, 27));
+    // 11/25 출발 2일차 = 11/26(사흘 뒤, 예보 있음), 3일차 = 11/27(나흘 뒤, 아직 없음)
+    expect(weatherPickFor(_trip(DateTime(2026, 11, 25)), 1, now).date, DateTime(2026, 11, 26));
+    expect(weatherPickFor(_trip(DateTime(2026, 11, 25)), 2, now).date, isNull);
   });
 
   test('지난 날은 예보 없음', () {

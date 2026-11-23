@@ -57,7 +57,7 @@ flutter run --dart-define-from-file=env/dev.json
 
 ```text
 lib/
-  app/              앱 셸(시작 화면 → 하단 3탭), 의존성(AppScope)
+  app/              앱 셸(시작 화면 → 하단 3탭: 여행지 · 여행 중 · 내 지도), 의존성(AppScope)
   core/
     config/         dart-define 설정
     theme/          픽클 테마 5(바이올렛) 토큰

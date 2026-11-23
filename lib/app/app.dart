@@ -243,7 +243,7 @@ class _StartGateState extends State<StartGate> {
   }
 }
 
-/// 하단 3탭: 내 지도 · 여행지 · 여행 중
+/// 하단 3탭: 여행지 · 여행 중 · 내 지도(처음엔 여행지)
 class HomeShell extends StatefulWidget {
   const HomeShell({super.key});
 
@@ -252,16 +252,18 @@ class HomeShell extends StatefulWidget {
 }
 
 class _HomeShellState extends State<HomeShell> {
-  int _index = 0;
+  static const _explore = 0, _trip = 1;
+
+  int _index = _explore;
 
   void _go(int i) => setState(() => _index = i);
 
   @override
   Widget build(BuildContext context) {
     final pages = [
-      MyMapScreen(onNewTrip: () => _go(1), onOpenTrip: () => _go(2)),
-      ExploreScreen(onTripStarted: () => _go(2)),
+      ExploreScreen(onTripStarted: () => _go(_trip)),
       const TripScreen(),
+      MyMapScreen(onNewTrip: () => _go(_explore), onOpenTrip: () => _go(_trip)),
     ];
     return Scaffold(
       body: AppBackground(child: SafeArea(bottom: false, child: IndexedStack(index: _index, children: pages))),
@@ -269,9 +271,9 @@ class _HomeShellState extends State<HomeShell> {
         selectedIndex: _index,
         onSelected: _go,
         items: const [
-          AppBottomBarItem(icon: Icons.map_outlined, label: '내 지도'),
           AppBottomBarItem(icon: Icons.explore_outlined, label: '여행지'),
           AppBottomBarItem(icon: Icons.luggage_outlined, label: '여행 중'),
+          AppBottomBarItem(icon: Icons.map_outlined, label: '내 지도'),
         ],
       ),
     );

@@ -45,8 +45,17 @@ void main() {
     await tester.tap(find.text('픽클 계정으로 시작하기'));
     await tester.pumpAndSettle();
 
-    expect(find.text('내 여행 지도'), findsWidgets);
+    // 탭 순서: 여행지 · 여행 중 · 내 지도, 처음엔 여행지
     expect(find.byType(AppBottomBar), findsOneWidget);
-    expect(find.text('여행지'), findsOneWidget);
+    final labels = ['여행지', '여행 중', '내 지도'];
+    final xs = [
+      for (final l in labels) tester.getCenter(find.descendant(of: find.byType(AppBottomBar), matching: find.text(l))).dx,
+    ];
+    expect(xs[0] < xs[1] && xs[1] < xs[2], isTrue, reason: '왼쪽부터 $labels');
+    expect(find.text('어디로 떠나볼까?'), findsOneWidget);
+
+    await tester.tap(find.descendant(of: find.byType(AppBottomBar), matching: find.text('내 지도')));
+    await tester.pumpAndSettle();
+    expect(find.text('내 여행 지도'), findsWidgets);
   });
 }

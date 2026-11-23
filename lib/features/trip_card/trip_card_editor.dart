@@ -12,7 +12,7 @@ import 'trip_card_layout.dart';
 /// - 스티커 누르기: 고르기(맨 위로 올라옴). 빈 곳 누르기: 고르기 해제
 /// - 한 손가락으로 끌기: 옮기기. 두 손가락: 크기·회전
 /// - 마우스(웹)에서는 아래 도구 막대로 크기·회전·떼기
-/// - 장소 막대(눈금+시간+이름): 끌면 같은 줄 길 위에서 좌우로 옮겨진다. 누르면 도구 막대에서 이름 위·아래 뒤집기·원래 자리로
+/// - 장소 막대(눈금+시간+이름): 끌면 길 위로 옮겨지고, 위아래로 끌면 가장 가까운 다른 줄로 간다. 누르면 도구 막대에서 이름 위·아래 뒤집기·원래 자리로
 /// - 서랍에서 카드로 끌어다 놓거나, 서랍 스티커를 누르면 카드 가운데에 붙는다([TripCardEditorState.addSticker]).
 ///
 /// 카드와 붙인 스티커는 [boundaryKey]의 `RepaintBoundary` 안에 있어 이미지 저장·공유에 그대로 쓴다.
@@ -63,6 +63,9 @@ class TripCardEditorState extends State<TripCardEditor> {
   // 끌기·두 손가락 제스처 상태
   String? _activeId;
   Offset _lastFocal = Offset.zero;
+
+  /// 장소 막대를 잡은 자리와 막대 사이 거리(끄는 동안 유지).
+  Offset _grab = Offset.zero;
   double _startSize = defaultStickerSize;
   double _startRotation = 0;
   var _added = 0;
@@ -180,7 +183,7 @@ class TripCardEditorState extends State<TripCardEditor> {
     final slot = _stopById(id);
     if (slot == null) return;
     final old = _stopEdits[id];
-    widget.store?.setStopEdit(widget.pageKey, id, StopEdit(x: old?.x, labelAbove: !slot.labelAbove));
+    widget.store?.setStopEdit(widget.pageKey, id, StopEdit(x: old?.x, row: old?.row, labelAbove: !slot.labelAbove));
   }
 
   void _resetStop(String id) => widget.store?.setStopEdit(widget.pageKey, id, null);
@@ -192,12 +195,14 @@ class TripCardEditorState extends State<TripCardEditor> {
     _activeStop = null;
     if (hit == null) {
       _activeId = null;
-      // 한 손가락으로 장소 막대를 잡으면 길 위에서 좌우로 옮긴다.
+      // 한 손가락으로 장소 막대를 잡으면 길 위로 옮긴다(위아래로 끌면 다른 줄로).
       final stop = d.pointerCount == 1 ? _stopAt(d.localFocalPoint) : null;
       if (stop != null) {
         if (_selectedStop != stop) _selectStop(stop);
         _activeStop = stop;
         _lastFocal = d.localFocalPoint;
+        final slot = _stopById(stop);
+        _grab = slot == null ? Offset.zero : Offset(slot.x, slot.y) - d.localFocalPoint;
       }
       return;
     }
@@ -230,14 +235,31 @@ class TripCardEditorState extends State<TripCardEditor> {
   }
 
   void _moveStop(String id, ScaleUpdateDetails d) {
-    final slot = _stopById(id);
     final store = widget.store;
-    if (slot == null || store == null) return;
-    final dx = d.localFocalPoint.dx - _lastFocal.dx;
+    final base = _baseSlotOf(id);
+    if (base == null || store == null) return;
     _lastFocal = d.localFocalPoint;
-    final range = stopDragRange(slot.row, widget.layout.rows);
-    final x = (slot.x + dx).clamp(range.min, range.max).toDouble();
-    store.setStopEdit(widget.pageKey, id, StopEdit(x: x, labelAbove: _stopEdits[id]?.labelAbove), save: false);
+    // 잡은 자리를 유지한 채 손가락을 따라간다. 가장 가까운 줄에 붙고, 그 줄 곧은 길 위로 x를 맞춘다.
+    final target = d.localFocalPoint + _grab;
+    final rows = widget.layout.rows;
+    final row = nearestRow(target.dy, rows);
+    final range = stopDragRange(row, rows);
+    final x = target.dx.clamp(range.min, range.max).toDouble();
+    store.setStopEdit(
+      widget.pageKey,
+      id,
+      StopEdit(x: x, row: row == base.row ? null : row, labelAbove: _stopEdits[id]?.labelAbove),
+      save: false,
+    );
+  }
+
+  /// 편집 전 기본 칸.
+  StopSlot? _baseSlotOf(String id) {
+    final i = widget.checkInIds.indexOf(id);
+    for (final s in widget.layout.stops) {
+      if (s.index == i) return s;
+    }
+    return null;
   }
 
   void _onScaleEnd(ScaleEndDetails d) {

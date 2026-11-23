@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../../app/app_scope.dart';
 import '../../core/life/life_repository.dart';
-import '../../core/pickle/pickle_models.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/votes/vote_repository.dart';
 import '../korea_map/korea_map_data.dart';
@@ -13,7 +12,7 @@ import '../trip/trip_models.dart';
 import '../votes/poll_screen.dart';
 import 'trip_candidates.dart';
 
-/// 2 · 여행지 고르기: 관심사(픽클 계정) → 도(전체로도 여행 가능) → 시·군·구 → 여행 만들기.
+/// 2 · 여행지 고르기: 도(전체로도 여행 가능) → 시·군·구 → 여행 만들기.
 class ExploreScreen extends StatefulWidget {
   const ExploreScreen({super.key, required this.onTripStarted});
 
@@ -24,9 +23,6 @@ class ExploreScreen extends StatefulWidget {
 }
 
 class _ExploreScreenState extends State<ExploreScreen> {
-  Future<(List<InterestCategory>, List<String>)>? _interests;
-  final Set<String> _selected = {};
-  bool _selectionLoaded = false;
 
   // 처음엔 강원 → 강릉시가 골라진 상태로 연다(예시).
   SelectedCity? _city = const SelectedCity(
@@ -35,13 +31,6 @@ class _ExploreScreenState extends State<ExploreScreen> {
     provinceCode: '32',
     provinceName: '강원특별자치도',
   );
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    final pickle = AppScope.of(context).pickle;
-    _interests ??= (() async => (await pickle.interestCategories(), await pickle.myInterestKeys()))();
-  }
 
   /// ♡로 담은 여행지 후보(최대 4곳, 기기에 저장). 2곳부터 친구한테 물어볼 수 있다.
   TripCandidates? _cands;
@@ -160,30 +149,6 @@ class _ExploreScreenState extends State<ExploreScreen> {
       padding: const EdgeInsets.all(Gap.m),
       children: [
         Text('어디로 떠나볼까?', style: titleStyle(26)),
-        const SizedBox(height: Gap.s + 2),
-        FutureBuilder<(List<InterestCategory>, List<String>)>(
-          future: _interests,
-          builder: (context, snap) {
-            final data = snap.data;
-            if (data == null) return const SizedBox(height: 36);
-            if (!_selectionLoaded) {
-              _selected.addAll(data.$2);
-              _selectionLoaded = true;
-            }
-            return Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: [
-                for (final c in data.$1)
-                  FilterChip(
-                    label: Text(c.displayNameKo),
-                    selected: _selected.contains(c.key),
-                    onSelected: (on) => setState(() => on ? _selected.add(c.key) : _selected.remove(c.key)),
-                  ),
-              ],
-            );
-          },
-        ),
         const SizedBox(height: Gap.s + 2),
         FutureBuilder<KoreaMapData>(
           future: scope.mapData,

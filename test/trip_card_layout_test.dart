@@ -138,5 +138,21 @@ void main() {
       expect(flipped.labelAbove, isTrue);
       expect(applyStopEdit(first, null, layout.rows), same(first));
     });
+
+    test('다른 줄로 옮기기: 그 줄 높이로, x는 그 줄 범위 안, 없어진 줄이면 마지막 줄', () {
+      final first = layout.stops.first; // 0번 줄
+      final moved = applyStopEdit(first, const StopEdit(x: 9999, row: 2), layout.rows);
+      expect(moved.row, 2);
+      expect(moved.y, config.firstRowY + 2 * config.rowGap);
+      expect(moved.x, stopDragRange(2, layout.rows).max);
+      final gone = applyStopEdit(first, const StopEdit(row: 50), layout.rows);
+      expect(gone.row, layout.rows - 1);
+      expect(nearestRow(config.firstRowY + config.rowGap * 0.6, layout.rows), 1);
+      expect(nearestRow(-100, layout.rows), 0);
+      expect(nearestRow(99999, layout.rows), layout.rows - 1);
+      // 저장·되읽기
+      final back = StopEdit.fromJson(const StopEdit(x: 120, row: 1, labelAbove: true).toJson())!;
+      expect((back.x, back.row, back.labelAbove), (120.0, 1, true));
+    });
   });
 }

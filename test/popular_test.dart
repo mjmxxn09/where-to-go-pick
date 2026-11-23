@@ -23,4 +23,12 @@ void main() {
     final found = await life.search(cityId: '32030', query: '순두부');
     expect(found.places.single.name, '초당순두부마을');
   });
+
+  test('예시 데이터는 강릉 장소뿐이라, 다른 지역(대전 중구)에는 내놓지 않는다', () async {
+    const life = FixtureLifeRepository();
+    final popular = await life.popular(cityId: '25020');
+    expect(popular.sections, isEmpty);
+    expect(popular.source, PlaceSource.sample);
+    expect((await life.search(cityId: '25020', query: '순두부')).places, isEmpty);
+  });
 }

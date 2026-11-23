@@ -27,7 +27,7 @@
 flutter create . --project-name where_to_go_pick --org io.github.mjmxxn09 --platforms android,ios
 flutter pub get
 flutter test
-flutter run                     # 예시 데이터 모드
+flutter run                     # 예시 데이터 모드(서버 없이, 장소는 강릉 예시뿐)
 ```
 
 `flutter create .`는 이미 있는 파일(`lib/main.dart`, `pubspec.yaml`, `test/widget_test.dart`)을 덮어쓰지 않아요.

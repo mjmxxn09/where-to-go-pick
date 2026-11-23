@@ -381,7 +381,14 @@ class _TripScreenState extends State<TripScreen> {
             }
             final popular = snap.data;
             final sections = popular?.sections ?? const <PlaceSection>[];
-            if (sections.isEmpty) return const _LoadProblem(message: '이 지역 인기 장소를 아직 못 찾았어요. 아래에서 찾아 담아 봐요.');
+            if (sections.isEmpty) {
+              // 예시 데이터 모드(env 없이 flutter run)는 강릉 예시 장소만 있다.
+              return _LoadProblem(
+                message: popular?.source == PlaceSource.sample
+                    ? '예시 데이터 모드라 강릉 예시 장소만 있어요. 실제 장소는 --dart-define-from-file=env/dev.json 으로 실행하면 나와요.'
+                    : '이 지역 인기 장소를 아직 못 찾았어요. 아래에서 찾아 담아 봐요.',
+              );
+            }
             final section = sections.firstWhere((x) => x.key == _section, orElse: () => sections.first);
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,

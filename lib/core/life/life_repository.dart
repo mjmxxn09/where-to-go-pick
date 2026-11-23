@@ -158,14 +158,19 @@ class FixtureLifeRepository implements LifeRepository {
         ),
       ];
 
+  /// 예시 장소는 강릉 것뿐이라, 다른 지역(대전 등)에는 내놓지 않는다(엉뚱한 지역 장소가 보이지 않게).
+  static const sampleCityId = '32030';
+
   @override
   Future<PopularPlaces> popular({required String cityId}) async {
+    if (cityId != sampleCityId) return const PopularPlaces(source: PlaceSource.sample, sections: []);
     final all = await places(cityId: cityId, interestKeys: const []);
     return PopularPlaces(source: PlaceSource.sample, sections: popularFrom(all));
   }
 
   @override
   Future<PlaceSearchResult> search({required String cityId, required String query, int page = 1}) async {
+    if (cityId != sampleCityId) return const PlaceSearchResult(source: PlaceSource.sample, places: []);
     final q = query.replaceAll(' ', '');
     final all = await places(cityId: cityId, interestKeys: const []);
     return PlaceSearchResult(

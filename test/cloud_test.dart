@@ -145,6 +145,113 @@ void main() {
     });
   });
 
+  group('카카오 로그인(Supabase Auth, PKCE)', () {
+    test('브라우저로 카카오 로그인 → 돌아온 code와 verifier로 세션을 받고, 다음엔 보관한 세션을 이어 쓴다', () async {
+      final account = MemoryCloudSecretStore();
+      final requests = <http.Request>[];
+      Uri? opened;
+      final session = CloudSession(
+        url: _url,
+        publishableKey: _key,
+        allowGuest: true,
+        guestStore: MemoryCloudSecretStore(),
+        accountStore: account,
+        clock: () => now,
+        httpClient: MockClient((req) async {
+          requests.add(req);
+          return _json({
+            'access_token': _jwt('kakao-user'),
+            'expires_in': 3600,
+            'refresh_token': 'acct-${requests.length}',
+            'user': {'id': 'kakao-user'},
+          });
+        }),
+      );
+      expect(await session.hasAccount, isFalse);
+
+      final auth = await session.signInWithKakao((url, scheme) async {
+        opened = url;
+        expect(scheme, 'wheretogopick');
+        return Uri.parse('wheretogopick://login-callback?code=the-code');
+      });
+      expect(auth.userId, 'kakao-user');
+      expect(opened!.path, '/auth/v1/authorize');
+      expect(opened!.queryParameters['provider'], 'kakao');
+      expect(opened!.queryParameters['redirect_to'], 'wheretogopick://login-callback');
+      expect(opened!.queryParameters['code_challenge_method'], 's256');
+
+      final exchange = requests.single;
+      expect(exchange.url.queryParameters['grant_type'], 'pkce');
+      final body = jsonDecode(exchange.body) as Map<String, dynamic>;
+      expect(body['auth_code'], 'the-code');
+      // code_challenge = base64url(sha256(verifier)), = 없이
+      final verifier = body['code_verifier'] as String;
+      expect(verifier.length, greaterThanOrEqualTo(43));
+      expect(opened!.queryParameters['code_challenge'], pkceChallengeOf(verifier));
+      expect(account.value, 'acct-1');
+      expect(await session.hasAccount, isTrue);
+
+      // 앱을 다시 켜면(새 세션 객체) 보관한 세션으로 이어 간다 — 게스트로 가입하지 않는다.
+      final reopened = CloudSession(
+        url: _url,
+        publishableKey: _key,
+        allowGuest: true,
+        guestStore: MemoryCloudSecretStore(),
+        accountStore: account,
+        clock: () => now,
+        httpClient: MockClient((req) async {
+          expect(req.url.path, '/auth/v1/token');
+          expect(req.url.queryParameters['grant_type'], 'refresh_token');
+          return _json({'access_token': _jwt('kakao-user'), 'expires_in': 3600, 'refresh_token': 'acct-2'});
+        }),
+      );
+      expect((await reopened.current())!.userId, 'kakao-user');
+      expect(account.value, 'acct-2');
+
+      await reopened.signOutAccount();
+      expect(await reopened.hasAccount, isFalse);
+    });
+
+    test('카카오에서 거절·취소하면 세션을 만들지 않는다', () async {
+      final account = MemoryCloudSecretStore();
+      final session = CloudSession(
+        url: _url,
+        publishableKey: _key,
+        accountStore: account,
+        httpClient: MockClient((req) async => fail('요청을 보내면 안 돼요')),
+      );
+      await expectLater(
+        session.signInWithKakao((url, scheme) async => Uri.parse('wheretogopick://login-callback#error=access_denied&error_description=user+denied')),
+        throwsA(isA<CloudAuthException>().having((e) => e.message, 'message', contains('user denied'))),
+      );
+      await expectLater(
+        session.signInWithKakao((url, scheme) async => throw const OAuthCanceled()),
+        throwsA(isA<OAuthCanceled>()),
+      );
+      expect(account.value, isNull);
+    });
+
+    test('보관한 카카오 세션이 만료되면 지우고 게스트로', () async {
+      final account = MemoryCloudSecretStore()..value = 'expired';
+      final paths = <String>[];
+      final session = CloudSession(
+        url: _url,
+        publishableKey: _key,
+        allowGuest: true,
+        guestStore: MemoryCloudSecretStore(),
+        accountStore: account,
+        httpClient: MockClient((req) async {
+          paths.add(req.url.path);
+          if (req.url.path == '/auth/v1/token') return _json({'error': 'invalid_grant'}, 400);
+          return _json({'access_token': _jwt('guest'), 'expires_in': 3600, 'refresh_token': 'g'});
+        }),
+      );
+      expect((await session.current())!.userId, 'guest');
+      expect(account.value, isNull);
+      expect(paths, ['/auth/v1/token', '/auth/v1/signup']);
+    });
+  });
+
   group('Data API', () {
     CloudSession guest(http.Client client) => CloudSession(
           url: _url,

@@ -68,6 +68,8 @@
 
 ## 카카오 로그인 — 붙일 때 할 일
 
+> 2026-11-23: 1단계로 **Supabase Auth 카카오 로그인**을 먼저 붙였다(픽클 서버 없이). 아래는 픽클 계정과 이어 쓰는 2단계 할 일. 설정·옮기기 설계는 [kakao-login.md](kakao-login.md).
+
 픽클 서버는 이미 `POST /v1/auth/social/kakao`(OIDC id_token, 처음이면 202 가입 티켓 → `/v1/auth/social/kakao/signup`)를 지원한다.
 
 1. **픽클의 카카오 앱을 같이 쓴다.** 서버가 id_token의 aud(카카오 앱 키)를 검사하고, 카카오 회원번호는 앱마다 다르다.

@@ -1,11 +1,13 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
 import '../core/auth/token_store.dart';
 import '../core/cloud/cloud_session.dart';
+import '../core/cloud/oauth_browser.dart';
 import '../core/cloud/supabase_rest.dart';
 import '../core/config/app_config.dart';
 import '../core/life/life_repository.dart';
@@ -160,7 +162,8 @@ class _WhereToGoPickAppState extends State<WhereToGoPickApp> with WidgetsBinding
 /// - 실행할 때마다 픽클 친구 6명 중 한 명(바로 전과 다른 친구)이 얼굴을 내민다.
 /// - 이미 로그인돼 있으면 스플래시만 잠깐 보여 주고 홈으로 간다.
 /// - 아니면 "픽클 계정으로 시작하기"(이메일 로그인 시트) 또는 "카카오로 시작하기".
-/// - 서버 없이(예시 데이터) 실행하면 버튼을 누르는 대로 바로 홈으로 간다.
+/// - 카카오는 지금 Supabase Auth로 바로 로그인한다(docs/kakao-login.md). 픽클 서버가 붙으면 픽클을 거치게 바꾼다.
+/// - 픽클 서버가 없으면 "픽클 계정으로 시작하기"는 게스트로 바로 홈, Supabase도 없으면 카카오도 바로 홈.
 class StartGate extends StatefulWidget {
   const StartGate({super.key, this.splashDuration = const Duration(milliseconds: 1200)});
 
@@ -175,6 +178,7 @@ class _StartGateState extends State<StartGate> {
   var _signedIn = false;
   var _entered = false;
   var _started = false;
+  var _loggingIn = false;
 
   @override
   void didChangeDependencies() {
@@ -192,6 +196,14 @@ class _StartGateState extends State<StartGate> {
         signedIn = await scope.pickle.me() != null;
       } on Object {
         signedIn = false; // 세션이 만료됐거나 서버에 닿지 않으면 로그인부터
+      }
+    }
+    // 카카오로 로그인해 둔 적이 있으면 바로 들어간다(세션이 만료됐으면 첫 동기화 때 게스트·폰 저장으로 돌아간다).
+    if (!signedIn) {
+      try {
+        signedIn = await scope.cloud?.session.hasAccount ?? false;
+      } on Object {
+        signedIn = false;
       }
     }
     if (!mounted) return;
@@ -218,15 +230,39 @@ class _StartGateState extends State<StartGate> {
     unawaited(scope.trip.sync());
   }
 
-  void _kakaoLogin() {
-    if (AppScope.of(context).config.usePickleFixtures) {
+  Future<void> _kakaoLogin() async {
+    final scope = AppScope.of(context);
+    final cloud = scope.cloud;
+    if (cloud == null) {
+      // 서버 없이(예시 데이터) 실행 중
       setState(() => _entered = true);
       return;
     }
-    // 카카오 SDK·픽클 카카오 앱 키 연결 전(docs/architecture.md "카카오 로그인").
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('카카오 로그인은 준비 중이에요. 픽클 계정으로 시작해 주세요.')),
-    );
+    if (kIsWeb) {
+      _say('웹에서는 아직 카카오 로그인을 못 해요. 폰 앱에서 해 주세요.');
+      return;
+    }
+    if (_loggingIn) return;
+    setState(() => _loggingIn = true);
+    try {
+      await cloud.session.signInWithKakao(openOAuthBrowser);
+      if (!mounted) return;
+      setState(() => _entered = true);
+      // 폰에 있던 기록(게스트로 남긴 것 포함)을 카카오 계정으로 올린다.
+      unawaited(scope.trip.sync());
+    } on OAuthCanceled {
+      // 사용자가 로그인 창을 닫았다
+    } on Object catch (e) {
+      debugPrint('카카오 로그인 실패: $e');
+      _say('카카오 로그인을 못 했어요. 잠시 뒤 다시 해 주세요.');
+    } finally {
+      if (mounted) setState(() => _loggingIn = false);
+    }
+  }
+
+  void _say(String text) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
   }
 
   @override
@@ -236,7 +272,7 @@ class _StartGateState extends State<StartGate> {
     if (character == null) return const ColoredBox(color: Color(0xFFF8F5FF));
     return StartScreen(
       character: character,
-      busy: _signedIn,
+      busy: _signedIn || _loggingIn,
       onPickleLogin: _pickleLogin,
       onKakaoLogin: _kakaoLogin,
     );

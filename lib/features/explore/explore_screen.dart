@@ -144,6 +144,8 @@ class _ExploreScreenState extends State<ExploreScreen> {
     final removed = store != null && store.contains(city.id) ? store.clear() : const <SelectedCity>[];
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(removed.isEmpty ? '${city.name} 여행을 만들었어요!' : '${city.name} 여행을 만들었어요! 갈까 말까 후보는 비웠어요'),
+      duration: const Duration(seconds: 4),
+      persist: false,
       action: removed.isEmpty || store == null
           ? null
           : SnackBarAction(label: '되돌리기', onPressed: () => store.restore(removed)),

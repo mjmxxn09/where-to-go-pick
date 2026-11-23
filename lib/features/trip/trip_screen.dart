@@ -164,6 +164,9 @@ class _TripScreenState extends State<TripScreen> {
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(
         content: Text('${place.name} 체크인!'),
+        // 버튼이 붙은 알림은 Flutter가 기본으로 계속 띄워 둔다 — 체크인은 잠깐만(바로 다음 체크인을 가리지 않게).
+        duration: const Duration(seconds: 2),
+        persist: false,
         action: SnackBarAction(
           label: '취소',
           onPressed: () {
@@ -192,7 +195,11 @@ class _TripScreenState extends State<TripScreen> {
     final points = await AppScope.of(context)
         .votes
         .answerPair(cityId: cityId, winnerPlaceId: winner.id, otherPlaceId: loser.id);
-    if (mounted && identical(_ask, ask)) setState(() => _points = points);
+    if (!mounted || !identical(_ask, ask)) return;
+    setState(() => _points = points);
+    // 답하고 나면 "고마워 +10P"를 잠깐 보여 주고 닫는다(계속 떠 있으면 아래 목록을 가린다).
+    await Future<void>.delayed(const Duration(milliseconds: 1800));
+    if (mounted && identical(_ask, ask)) setState(() => _ask = null);
   }
 
   Future<void> _togglePlaceVote(String cityId, String placeId) async {
@@ -261,6 +268,8 @@ class _TripScreenState extends State<TripScreen> {
     setState(() => _ask = null);
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text('${ended.title}을 마쳤어요.'),
+      duration: const Duration(seconds: 4),
+      persist: false,
       action: SnackBarAction(label: '되돌리기', onPressed: () => controller.resumeTrip(ended.id)),
     ));
   }
@@ -410,6 +419,8 @@ class _TripScreenState extends State<TripScreen> {
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(
         content: Text('${removed.placeName} 체크인을 지웠어요.'),
+        duration: const Duration(seconds: 4),
+        persist: false,
         action: SnackBarAction(label: '되돌리기', onPressed: () => controller.restoreCheckIn(removed)),
       ));
   }

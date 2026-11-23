@@ -381,4 +381,27 @@ void main() {
     expect(controller.trip!.planned.map((p) => p.day), [1, null], reason: '3일차는 없어졌으니 날짜 미정');
     expect(plannedFromJson({'id': 'a', 'name': 'A', 'day': 99})!.day, isNull, reason: '이상한 값은 버린다');
   });
+
+  test('가볼 곳 순서 바꾸기: 보이던 것끼리만, 다른 날 장소 자리는 그대로', () async {
+    PlannedPlace pl(String id, int? day) => PlannedPlace(id: id, name: id, type: PlaceType.other, day: day);
+    final all = [pl('a', 0), pl('b', 1), pl('c', 0), pl('d', 0)];
+    // 1일차(a, c, d)만 보고 d를 맨 앞으로
+    expect(reorderSubset(all, ['d', 'a', 'c']).map((p) => p.id), ['d', 'b', 'a', 'c']);
+    // 전체를 보고 바꾸기
+    expect(reorderSubset(all, ['b', 'a', 'd', 'c']).map((p) => p.id), ['b', 'a', 'd', 'c']);
+    // 이상한 목록이면 그대로
+    expect(reorderSubset(all, ['a', 'a']), same(all));
+    expect(reorderSubset(all, ['z']), same(all));
+
+    final store = MemoryTripStore();
+    final controller = TripController(clock: () => DateTime(2026, 11, 20, 10), store: store)
+      ..startTrip(cityId: '32030', cityName: '강릉시', provinceName: '강원특별자치도');
+    controller.togglePlanned(_place);
+    controller.togglePlanned(const PlaceSuggestion(id: 'tour:2', name: '테라로사', type: PlaceType.cafe, meta: '카페'));
+    controller.reorderPlanned(['tour:2', 'gyeongpo']);
+    expect(controller.trip!.planned.map((p) => p.id), ['tour:2', 'gyeongpo']);
+    await Future<void>.delayed(Duration.zero);
+    expect(decodeTripLog(encodeTripLog(store.log)).trips.single.planned.map((p) => p.id), ['tour:2', 'gyeongpo'],
+        reason: '바꾼 순서가 저장된다');
+  });
 }

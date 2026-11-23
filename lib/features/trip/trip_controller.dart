@@ -268,6 +268,16 @@ class TripController extends ChangeNotifier {
     ));
   }
 
+  /// 가볼 곳 순서 바꾸기. [ids]는 화면에 보이던 가볼 곳(전체 또는 그날 것)의 새 순서.
+  /// 그 장소들이 있던 자리에 새 순서대로 다시 넣는다(다른 날 장소의 자리는 그대로).
+  void reorderPlanned(List<String> ids) {
+    final current = _trip;
+    if (current == null) return;
+    final next = reorderSubset(current.planned, ids);
+    if (identical(next, current.planned)) return;
+    _replaceCurrent(current.copyWith(planned: next));
+  }
+
   /// 가볼 곳의 날을 바꾼다(null = 날짜 미정).
   void setPlannedDay(String placeId, int? day) {
     final current = _trip;

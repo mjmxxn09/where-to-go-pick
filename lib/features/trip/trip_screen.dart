@@ -346,14 +346,49 @@ class _TripScreenState extends State<TripScreen> {
           ),
           const SizedBox(height: Gap.s),
         ],
-        for (final (i, p) in list.indexed)
-          _tile(
-            controller,
-            trip,
-            PlaceSuggestion(id: p.id, name: p.name, type: p.type, meta: p.meta, url: p.url, location: p.location),
-            rank: i + 1,
-            pinStyle: true,
-            planned: p,
+        // 길게 눌러 끌면 순서 바꾸기(날을 골랐으면 그날 것끼리). 번호·지도 핀·동선도 따라 바뀐다.
+        ReorderableListView(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          padding: EdgeInsets.zero,
+          buildDefaultDragHandles: false,
+          proxyDecorator: (child, index, animation) => Material(
+            color: Colors.transparent,
+            elevation: 6,
+            shadowColor: AppColors.primary.withValues(alpha: 0.3),
+            borderRadius: BorderRadius.circular(18),
+            child: child,
+          ),
+          onReorder: (from, to) {
+            final ids = [for (final p in list) p.id];
+            final moved = ids.removeAt(from);
+            ids.insert(to > from ? to - 1 : to, moved);
+            controller.reorderPlanned(ids);
+          },
+          children: [
+            for (final (i, p) in list.indexed)
+              ReorderableDelayedDragStartListener(
+                key: ValueKey('planned-${p.id}'),
+                index: i,
+                child: _tile(
+                  controller,
+                  trip,
+                  PlaceSuggestion(id: p.id, name: p.name, type: p.type, meta: p.meta, url: p.url, location: p.location),
+                  rank: i + 1,
+                  pinStyle: true,
+                  planned: p,
+                ),
+              ),
+          ],
+        ),
+        if (list.length > 1)
+          const Padding(
+            padding: EdgeInsets.only(top: 2),
+            child: Text(
+              '길게 눌러 끌면 순서를 바꿀 수 있어요',
+              textAlign: TextAlign.right,
+              style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+            ),
           ),
       ],
     ];

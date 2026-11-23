@@ -238,3 +238,14 @@ const provinceShortNames = <String, String>{
 
 /// 제목에 쓰는 짧은 지역 이름: 도·광역시는 짧은 이름, 시·군·구는 끝 글자를 뗀다(강릉시 → 강릉).
 String regionShortName(String name) => provinceShortNames[name] ?? name.replaceAll(RegExp(r'(시|군|구)$'), '');
+
+/// [all] 가운데 [ids]에 든 것만 [ids] 순서로 바꾼다. 그 장소들이 있던 자리에 차례로 넣고, 나머지는 자리 그대로.
+/// [ids]가 [all]에 없는 id를 담고 있거나 겹치면 바꾸지 않는다(같은 목록을 돌려준다).
+List<PlannedPlace> reorderSubset(List<PlannedPlace> all, List<String> ids) {
+  final byId = {for (final p in all) p.id: p};
+  if (ids.toSet().length != ids.length || !ids.every(byId.containsKey)) return all;
+  final picked = ids.toSet();
+  final queue = [for (final id in ids) byId[id]!];
+  var k = 0;
+  return [for (final p in all) picked.contains(p.id) ? queue[k++] : p];
+}

@@ -85,10 +85,20 @@ class TripController extends ChangeNotifier {
 
   Future<void> _sync(TripCloud cloud) async {
     try {
+      // 지운 것을 먼저 서버에서 지우고 나서 받는다. 받은 뒤에 지우면, 지우기에 성공해 표시가 빠진 체크인이
+      // 먼저 받아 둔 서버 기록에서 되살아난다. 지우는 사이(다른 곳에서 동시에) 빠진 표시도 합칠 때까지는 지킨다.
+      final dropTrips = {..._deletedTrips};
+      final dropCheckIns = {..._deletedCheckIns};
+      await _flushDeletes(cloud);
+      if (_disposed) return;
       final remote = await cloud.pull();
       if (_disposed) return;
-      await _flushDeletes(cloud);
-      final merged = mergeTrips(_trips, remote, deletedTrips: _deletedTrips, deletedCheckIns: _deletedCheckIns);
+      final merged = mergeTrips(
+        _trips,
+        remote,
+        deletedTrips: {...dropTrips, ..._deletedTrips},
+        deletedCheckIns: {...dropCheckIns, ..._deletedCheckIns},
+      );
       final changed = !_sameTrips(merged, _trips);
       _trips = merged;
       final current = _trip;

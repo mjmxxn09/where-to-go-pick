@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#8A6CFF"/>
+      <stop offset="1" stop-color="#5638E0"/>
+    </linearGradient>
+    <linearGradient id="pin" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#F0EDFF"/>
+    </linearGradient>
+  </defs>
+  <rect width="1024" height="1024" rx="0" fill="url(#bg)"/>
+  <!-- soft blobs: 분홍·하늘 번짐 -->
+  <circle cx="150" cy="170" r="210" fill="#FF9BCB" opacity="0.28"/>
+  <circle cx="900" cy="880" r="240" fill="#7FD3FF" opacity="0.25"/>
+  <!-- road dashes -->
+  <path d="M170 830 C 330 760, 420 900, 600 840 S 860 760, 900 700" fill="none" stroke="#FFFFFF" stroke-opacity="0.55" stroke-width="26" stroke-linecap="round" stroke-dasharray="2 58"/>
+  <!-- shadow -->
+  <ellipse cx="512" cy="800" rx="150" ry="34" fill="#2B1A8F" opacity="0.30"/>
+  <!-- map pin -->
+  <path d="M512 150 C 345 150, 235 272, 235 425 C 235 590, 420 700, 512 790 C 604 700, 789 590, 789 425 C 789 272, 679 150, 512 150 Z" fill="url(#pin)"/>
+  <!-- star inside pin -->
+  <path d="M512 290 L 553 374 L 645 387 L 578 451 L 594 543 L 512 499 L 430 543 L 446 451 L 379 387 L 471 374 Z" fill="#FFC53D" stroke="#F2A900" stroke-width="14" stroke-linejoin="round"/>
+  <!-- sparkle -->
+  <path d="M800 230 l 18 44 l 44 18 l -44 18 l -18 44 l -18 -44 l -44 -18 l 44 -18 Z" fill="#FFFFFF" opacity="0.9"/>
+</svg>

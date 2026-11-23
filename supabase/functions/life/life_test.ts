@@ -77,6 +77,12 @@ Deno.test("시·군·구 찾기: 도 안에서, 합친 시, 바뀐 이름, 도�
   assertEquals(matchCity(LDONGS, "32", "없는군"), []);
 });
 
+Deno.test("도·광역시 전체(시·군·구 이름 없음): 도 코드만, 시·군·구 코드는 빈 칸", () => {
+  assertEquals(matchCity(LDONGS, "32", ""), [{ regnCd: "51", regnNm: "강원특별자치도", signguCd: "", signguNm: "" }]);
+  assertEquals(matchCity(LDONGS, "23", " ").map((l) => l.regnCd), ["28"]);
+  assertEquals(matchCity(LDONGS, "25", ""), [], "목록에 없는 도");
+});
+
 Deno.test("장소 종류와 짧은 설명", () => {
   assertEquals(classify({ title: "경포해수욕장", contenttypeid: "12" }), "beach");
   assertEquals(classify({ title: "강릉 오죽헌", contenttypeid: "12", lclsSystm1: "HS" }), "heritage");

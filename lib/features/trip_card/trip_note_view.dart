@@ -79,7 +79,7 @@ class TripNoteView extends StatelessWidget {
   bool get _isDayPage => page.isSingleDay && trip.days.length > 1;
 
   String _title() {
-    final city = trip.cityName.replaceAll(RegExp(r'(시|군|구)$'), '');
+    final city = regionShortName(trip.cityName);
     return _isDayPage ? '$city ${page.days.first.label}' : trip.title;
   }
 

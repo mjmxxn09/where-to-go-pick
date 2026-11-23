@@ -6,6 +6,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:where_to_go_pick/features/korea_map/geo_projection.dart';
 import 'package:where_to_go_pick/features/korea_map/korea_map_data.dart';
 import 'package:where_to_go_pick/features/trip/planned_map.dart';
+import 'package:where_to_go_pick/features/trip/trip_models.dart';
+import 'package:where_to_go_pick/features/trip/visited_cities.dart';
 
 void main() {
   final data = KoreaMapData.fromJson(
@@ -56,5 +58,36 @@ void main() {
     }
     expect(layout.pinAt(layout.pins[2]! + const Offset(5, 5)), 2);
     expect(layout.pinAt(const Offset(-50, -50)), isNull);
+  });
+
+  test('도 전체 여행: 체크인한 가볼 곳이 든 시·군·구를 내 지도에 칠한다', () {
+    final trip = Trip(
+      id: 't',
+      cityId: '25',
+      cityName: '대전광역시',
+      provinceName: '대전광역시',
+      startDate: DateTime(2026, 11, 20),
+      planned: const [
+        PlannedPlace(id: 'a', name: '성심당 본점', type: PlaceType.food, location: GeoPoint(36.3276, 127.4273)),
+        PlannedPlace(id: 'b', name: '안 간 곳', type: PlaceType.food, location: GeoPoint(36.3624, 127.3565)),
+      ],
+      checkIns: [
+        CheckIn(id: 'a', placeName: '성심당 본점', type: PlaceType.food, at: DateTime(2026, 11, 20, 10)),
+        CheckIn(id: 'x', placeName: '좌표 모르는 곳', type: PlaceType.cafe, at: DateTime(2026, 11, 20, 12)),
+      ],
+    );
+    final daejeonJung = data.details['25']!.cities.firstWhere((c) => c.name == '중구').id;
+    expect(citiesFromWholeProvinceTrips(data, [trip]), {daejeonJung});
+    expect(trip.isWholeProvince, isTrue);
+    expect(trip.title, '대전 여행');
+  });
+
+  test('짧은 지역 이름', () {
+    expect(regionShortName('강원특별자치도'), '강원');
+    expect(regionShortName('충청북도'), '충북');
+    expect(regionShortName('강릉시'), '강릉');
+    expect(regionShortName('양양군'), '양양');
+    expect(isProvinceId('25'), isTrue);
+    expect(isProvinceId('31:수원시'), isFalse);
   });
 }

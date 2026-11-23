@@ -130,6 +130,8 @@ export function inRegion(address: string, provinceCode: string, cityName: string
   const short = SGIS_PROVINCE[provinceCode];
   if (!short || !address) return false;
   const tokens = address.trim().split(/\s+/);
+  // 도·광역시 전체(시·군·구 이름 없음): 도만 맞으면 된다.
+  if (!cityName.trim()) return provinceShort(tokens[0] ?? "") === short;
   const city = (CITY_ALIASES[`${short}:${cityName}`] ?? cityName).replace(/\s/g, "");
   // 군위군은 대구로 옮겨 갔다: 도와 상관없이 시·군 이름으로만 본다.
   if (short === "경북" && city === "군위군") return tokens[1] === "군위군";
@@ -141,6 +143,7 @@ export function inRegion(address: string, provinceCode: string, cityName: string
 /** 지역 이름: 검색어 앞에 붙인다("강릉시 맛집"). 시·군 끝 글자는 떼면 카카오가 더 잘 알아듣는 경우가 많다. */
 export function regionWord(provinceCode: string, cityName: string): string {
   const short = SGIS_PROVINCE[provinceCode] ?? "";
+  if (!cityName.trim()) return short; // 도·광역시 전체: "대전 맛집", "강원 가볼만한곳"
   const city = CITY_ALIASES[`${short}:${cityName}`] ?? cityName;
   if (short === "세종") return "세종";
   // 서울 중구·부산 중구처럼 같은 이름의 구가 여러 도에 있으면 도 이름을 앞에.
@@ -183,7 +186,9 @@ const searchCache = new TtlCache<{ places: KakaoPlace[]; hasMore: boolean; outsi
 export function searchKakao(provinceCode: string, cityName: string, query: string, page = 1) {
   return searchCache.get(`${provinceCode}:${cityName}:${query}:${page}`, async () => {
     const region = regionWord(provinceCode, cityName);
-    const q = query.includes(cityName.replace(/(시|군|구)$/, "")) ? query : `${region} ${query}`;
+    // 검색어에 이미 지역 이름이 있으면 그대로(시·군·구가 없으면 도 이름으로 본다).
+    const place = cityName.trim() ? cityName.replace(/(시|군|구)$/, "") : region;
+    const q = place && query.includes(place) ? query : `${region} ${query}`;
     const local = await keyword({ query: q, size: 15, page, sort: "accuracy" });
     const inside = local.docs.filter((d) => inRegion(d.road_address_name || d.address_name, provinceCode, cityName));
     if (inside.length || page > 1) {

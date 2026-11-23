@@ -93,10 +93,12 @@ class _WhereToGoPickAppState extends State<WhereToGoPickApp> with WidgetsBinding
   }
 
   /// 지도 id → 도 코드·시·군·구 이름(`31:수원시`처럼 합친 시도 앞 두 자리가 도 코드).
+  /// 도 코드 두 자리면 도·광역시 전체라 시·군·구 이름은 빈 문자열.
   Future<({String provinceCode, String cityName})?> _cityOf(String cityId) async {
     if (cityId.length < 2) return null;
     final code = cityId.substring(0, 2);
     final detail = (await _mapData).details[code];
+    if (cityId == code) return detail == null ? null : (provinceCode: code, cityName: '');
     for (final city in detail?.cities ?? const <MapRegion>[]) {
       if (city.id == cityId) return (provinceCode: code, cityName: city.name);
     }

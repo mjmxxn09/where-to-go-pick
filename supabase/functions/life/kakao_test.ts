@@ -38,6 +38,12 @@ Deno.test("그 시·군·구 안인지, 검색 앞에 붙일 지역 이름", () 
   assertEquals(regionWord("32", "강릉시"), "강릉시");
   assertEquals(regionWord("11", "중구"), "서울 중구");
   assertEquals(regionWord("23", "남구"), "인천 미추홀구");
+  // 도·광역시 전체
+  assert(inRegion("대전 유성구 대학로 1", "25", ""));
+  assert(inRegion("강원특별자치도 속초시 해오름로 1", "32", ""));
+  assert(!inRegion("충남 공주시 1", "25", ""));
+  assertEquals(regionWord("25", ""), "대전");
+  assertEquals(regionWord("32", ""), "강원");
 });
 
 function stubKakao(handler: (url: URL) => unknown) {
@@ -98,4 +104,24 @@ Deno.test("앱에 보내는 장소: 한국 안 좌표만 소수 6자리로, 주�
   assertEquals(out[0], { id: "kakao:1", name: "경포대", type: "heritage", meta: "", url: "http://place.map.kakao.com/1", lat: 37.795123, lng: 128.896123 });
   assertEquals(out[1], { id: "tour:2", name: "좌표 없음", type: "food", meta: "" });
   assertEquals(out[2], { id: "tour:3", name: "바다 한가운데", type: "food", meta: "" });
+});
+
+Deno.test("도·광역시 전체 검색: 도 이름을 붙이고, 그 도 주소만", async () => {
+  const s = stubKakao(() => ({
+    documents: [
+      doc({ id: "1", place_name: "성심당 본점", road_address_name: "대전 중구 대종로480번길 15" }),
+      doc({ id: "2", place_name: "성심당 세종점", road_address_name: "세종특별자치시 1" }),
+    ],
+    meta: { is_end: false },
+  }));
+  try {
+    const r = await searchKakao("25", "", "성심당");
+    assertEquals(r.places.map((p) => p.id), ["kakao:1"]);
+    assertEquals(r.outside, false);
+    assertEquals(s.calls.map((u) => u.searchParams.get("query")), ["대전 성심당"]);
+    await searchKakao("25", "", "대전 빵집");
+    assertEquals(s.calls.at(-1)?.searchParams.get("query"), "대전 빵집", "이미 도 이름이 있으면 그대로");
+  } finally {
+    s.restore();
+  }
 });

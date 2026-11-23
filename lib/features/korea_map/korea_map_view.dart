@@ -21,10 +21,18 @@ class SelectedCity {
     required this.provinceName,
   });
 
+  /// 시·군·구 id, 또는 도·광역시 전체면 도 코드(두 자리).
   final String id;
   final String name;
   final String provinceCode;
   final String provinceName;
+
+  /// 시·군·구를 고르지 않은 도·광역시 전체.
+  bool get isWholeProvince => id == provinceCode;
+
+  /// 도·광역시 전체 선택.
+  factory SelectedCity.province(ProvinceDetail detail) =>
+      SelectedCity(id: detail.code, name: detail.name, provinceCode: detail.code, provinceName: detail.name);
 }
 
 /// 귀여운 대한민국 지도. 도(광역시)를 누르면 그 도의 시·군·구 지도로 들어가고, "전국"으로 돌아온다.
@@ -62,7 +70,9 @@ class _KoreaMapViewState extends State<KoreaMapView> {
   void initState() {
     super.initState();
     _province = widget.initialProvince;
-    _city = widget.initialCity;
+    // 도 전체를 고른 상태(도 코드)면 시·군·구는 고르지 않은 것.
+    final city = widget.initialCity;
+    _city = city == null || city == _province ? null : city;
   }
 
   bool _provinceVisited(String code) => widget.visitedCityIds.any((id) => id.startsWith(code));
@@ -75,13 +85,15 @@ class _KoreaMapViewState extends State<KoreaMapView> {
     widget.onCityChanged?.call(null);
   }
 
+  /// 도를 열면 그 도·광역시 전체가 골라진다. 시·군·구를 누르면 좁혀진다.
   void _openProvince(String code) {
-    if (!widget.data.details.containsKey(code)) return;
+    final detail = widget.data.details[code];
+    if (detail == null) return;
     setState(() {
       _province = code;
       _city = null;
     });
-    widget.onCityChanged?.call(null);
+    widget.onCityChanged?.call(SelectedCity.province(detail));
   }
 
   /// 울릉도·독도 상자 = 울릉군. 전국 지도에서 눌러도 경상북도 지도로 들어가며 바로 울릉군을 고른다.
@@ -123,6 +135,12 @@ class _KoreaMapViewState extends State<KoreaMapView> {
     }
     for (final c in detail.cities.reversed) {
       if (c.path.contains(p)) {
+        // 고른 시·군·구를 한 번 더 누르면 다시 도 전체.
+        if (c.id == _city && widget.mode == KoreaMapMode.explore) {
+          setState(() => _city = null);
+          widget.onCityChanged?.call(SelectedCity.province(detail));
+          return;
+        }
         setState(() => _city = c.id);
         widget.onCityChanged?.call(SelectedCity(
           id: c.id,
@@ -174,7 +192,9 @@ class _KoreaMapViewState extends State<KoreaMapView> {
       }
     }
 
-    final title = detail?.name ?? (visitedMode ? '내가 다녀온 곳' : '지역을 눌러 봐!');
+    final title = detail == null
+        ? (visitedMode ? '내가 다녀온 곳' : '지역을 눌러 봐!')
+        : (!visitedMode && _city == null ? '${detail.name} 전체' : detail.name);
 
     return Container(
       height: widget.height,

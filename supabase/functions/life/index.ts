@@ -29,7 +29,7 @@ const fail = (status: number, code: string, message: string) => json(status, { c
 
 async function codesFor(provinceCode: string, cityName: string): Promise<Ldong[]> {
   const codes = matchCity(await loadLdongs(), provinceCode, cityName);
-  if (!codes.length) throw new UpstreamError("CITY_NOT_FOUND", `${cityName}의 지역 코드를 찾지 못했어요.`);
+  if (!codes.length) throw new UpstreamError("CITY_NOT_FOUND", `${cityName || provinceCode}의 지역 코드를 찾지 못했어요.`);
   return codes;
 }
 
@@ -58,8 +58,9 @@ Deno.serve(async (req) => {
   const action = String(body?.action ?? "");
   const provinceCode = String(body?.provinceCode ?? "");
   const cityName = String(body?.cityName ?? "").trim();
-  if (!/^\d{2}$/.test(provinceCode) || !cityName || cityName.length > 40) {
-    return fail(400, "BAD_REQUEST", "provinceCode(두 자리)와 cityName이 필요해요.");
+  // cityName이 비면 도·광역시 전체.
+  if (!/^\d{2}$/.test(provinceCode) || cityName.length > 40) {
+    return fail(400, "BAD_REQUEST", "provinceCode(두 자리)가 필요해요(cityName은 비우면 도 전체).");
   }
 
   if (!["places", "weather", "search", "popular"].includes(action)) {

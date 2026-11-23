@@ -144,7 +144,10 @@ class Trip {
   /// 출발 전인지(오늘이 출발일보다 앞).
   bool isBeforeStart(DateTime now) => dayIndexOf(now) < 0;
 
-  String get title => '${cityName.replaceAll(RegExp(r'(시|군|구)$'), '')} 여행';
+  String get title => '${regionShortName(cityName)} 여행';
+
+  /// 시·군·구를 고르지 않고 도·광역시 전체로 만든 여행(cityId가 도 코드 두 자리).
+  bool get isWholeProvince => isProvinceId(cityId);
 
   /// [ended]: null이면 그대로, false면 다시 진행 중으로, true면 [endedAt]으로 마침.
   /// [plannedDays]를 바꿀 때는 [setPlannedDays]를 true로(그래야 null로도 바꿀 수 있다).
@@ -214,3 +217,17 @@ String dateRangeLabel(DateTime start, DateTime end) {
   if (start.month == end.month && start.year == end.year) return '${start.month}월 ${start.day}일 – ${end.day}일';
   return '${start.month}월 ${start.day}일 – ${end.month}월 ${end.day}일';
 }
+
+/// 여행지 id가 도·광역시 전체(통계청 도 코드 두 자리, 예: 25 대전)인지. 시·군·구는 다섯 자리나 `31:수원시`.
+bool isProvinceId(String id) => id.length == 2;
+
+/// 도·광역시 이름 → 짧은 이름(대전광역시 → 대전, 충청북도 → 충북).
+const provinceShortNames = <String, String>{
+  '서울특별시': '서울', '부산광역시': '부산', '대구광역시': '대구', '인천광역시': '인천', '광주광역시': '광주',
+  '대전광역시': '대전', '울산광역시': '울산', '세종특별자치시': '세종', '경기도': '경기', '강원특별자치도': '강원',
+  '충청북도': '충북', '충청남도': '충남', '전북특별자치도': '전북', '전라남도': '전남', '경상북도': '경북',
+  '경상남도': '경남', '제주특별자치도': '제주',
+};
+
+/// 제목에 쓰는 짧은 지역 이름: 도·광역시는 짧은 이름, 시·군·구는 끝 글자를 뗀다(강릉시 → 강릉).
+String regionShortName(String name) => provinceShortNames[name] ?? name.replaceAll(RegExp(r'(시|군|구)$'), '');

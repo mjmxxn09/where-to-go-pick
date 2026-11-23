@@ -38,6 +38,7 @@
 ## 여행지 정보 (Edge Function `life`)
 
 - `POST {action: "popular" | "search" | "weather" | "places", provinceCode: "32", cityName: "강릉시", date?, query?, page?}` — 이 앱 사용자 토큰만 받는다(공공데이터·카카오 호출량 보호).
+  `cityName`을 비우면 **도·광역시 전체**(대전 전체, 강원 전체): 인기·검색은 그 도 주소인 곳, 관광공사는 시·군·구 코드 없이 도 코드만, 날씨는 그 도 관광지 좌표의 가운데.
 - **인기 장소(`popular`)** — 여행 중 화면 위쪽. 명소(`가볼만한곳` AT4)·맛집(FD6)·카페(CE7)·문화(`박물관 미술관` CT1) 칸마다 그 시·군·구 주소인 곳만 카카오 정확도순 5곳(6시간 캐시).
   카카오 키(`KAKAO_REST_API_KEY`)가 없으면 아래 TourAPI 장소 목록에서 칸마다 앞 5곳(`source: "tour"`).
 - **검색(`search`, `page` 1~3)** — 카카오 키워드 검색 15곳씩, 최대 45곳. 그 지역 이름을 붙여 찾고, 그 지역 주소가 하나도 없으면 전국 결과(`outside: true`). 결과마다 카카오맵 장소 페이지 `url`(앱은 `place.map.kakao.com`만 연다).

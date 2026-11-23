@@ -8,6 +8,7 @@ import '../korea_map/korea_map_data.dart';
 import '../korea_map/korea_map_view.dart';
 import '../trip/trip_controller.dart';
 import '../trip/trip_models.dart';
+import '../trip/visited_cities.dart';
 import '../trip_card/trip_card_screen.dart';
 
 /// 1 · 내 여행 지도: 다녀온 시·군·구가 색칠된 지도와 지금 여행 바로가기.
@@ -138,7 +139,9 @@ class _MyMapScreenState extends State<MyMapScreen> {
             builder: (context, snap) {
               if (snap.hasError) return const _MapError();
               if (!snap.hasData) return const SizedBox(height: 460, child: Center(child: CircularProgressIndicator()));
-              return KoreaMapView(data: snap.data!, mode: KoreaMapMode.visited, visitedCityIds: visited);
+              // 도 전체 여행은 체크인한 곳이 든 시·군·구까지 칠한다.
+              final painted = {...visited, ...citiesFromWholeProvinceTrips(snap.data!, scope.trip.trips)};
+              return KoreaMapView(data: snap.data!, mode: KoreaMapMode.visited, visitedCityIds: painted);
             },
           ),
         ),

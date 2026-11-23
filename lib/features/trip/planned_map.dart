@@ -87,6 +87,7 @@ class PlannedMapLayout {
 }
 
 /// 가볼 곳 위에 놓는 작은 지도: 이 시·군·구 모양(주변 시·군·구는 흐리게) + 담은 곳 번호 핀.
+/// 도·광역시 전체 여행([cityId]가 도 코드)이면 그 도의 시·군·구를 모두 제 색으로 그린다.
 /// 핀을 누르면 이름이 뜬다. 지도 그림은 앱에 든 통계청 경계라 인터넷·지도 키가 필요 없다.
 class PlannedMap extends StatefulWidget {
   const PlannedMap({
@@ -128,15 +129,22 @@ class _PlannedMapState extends State<PlannedMap> {
         if (data == null) return SizedBox(height: widget.height);
         final province = widget.cityId.substring(0, 2);
         final detail = data.details[province];
+        final whole = isProvinceId(widget.cityId);
         final city = _cityOf(detail, widget.cityId);
-        if (detail == null || city == null) return const SizedBox.shrink();
+        if (detail == null || (!whole && city == null)) return const SizedBox.shrink();
+        final shown = whole ? detail.cities : [city!];
+        var bounds = shown.first.path.getBounds();
+        for (final r in shown.skip(1)) {
+          bounds = bounds.expandToInclude(r.path.getBounds());
+        }
+        final placeName = whole ? detail.name : city!.name;
         final points = <int, Offset>{
           for (final p in widget.pins)
             if (projectToDetail(province, p.at.lat, p.at.lng) case final at?) p.number: at,
         };
         return LayoutBuilder(builder: (context, box) {
           final size = Size(box.maxWidth, widget.height);
-          final layout = PlannedMapLayout.fit(city: city.path.getBounds(), points: points, size: size);
+          final layout = PlannedMapLayout.fit(city: bounds, points: points, size: size);
           final byNumber = {for (final p in widget.pins) p.number: p};
           final selected = byNumber[_selected];
           final notShown = layout.outside + widget.missing + (widget.pins.length - points.length);
@@ -144,7 +152,7 @@ class _PlannedMapState extends State<PlannedMap> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Semantics(
-                label: '가볼 곳 지도, ${city.name}에 ${layout.pins.length}곳',
+                label: '가볼 곳 지도, $placeName에 ${layout.pins.length}곳',
                 child: GestureDetector(
                   onTapUp: (d) => setState(() {
                     final n = layout.pinAt(d.localPosition);
@@ -156,8 +164,8 @@ class _PlannedMapState extends State<PlannedMap> {
                       size: size,
                       painter: _PlannedMapPainter(
                         layout: layout,
-                        city: city,
-                        neighbors: detail.cities,
+                        shown: {for (final r in shown) r.id},
+                        regions: detail.cities,
                         pins: byNumber,
                         selected: _selected,
                       ),
@@ -205,15 +213,17 @@ MapRegion? _cityOf(ProvinceDetail? detail, String id) {
 class _PlannedMapPainter extends CustomPainter {
   _PlannedMapPainter({
     required this.layout,
-    required this.city,
-    required this.neighbors,
+    required this.shown,
+    required this.regions,
     required this.pins,
     required this.selected,
   });
 
   final PlannedMapLayout layout;
-  final MapRegion city;
-  final List<MapRegion> neighbors;
+
+  /// 여행지(제 색으로 그릴 시·군·구 id). 나머지 [regions]는 흐리게.
+  final Set<String> shown;
+  final List<MapRegion> regions;
   final Map<int, PlannedPin> pins;
   final int? selected;
 
@@ -230,18 +240,24 @@ class _PlannedMapPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.4 / s
       ..strokeJoin = StrokeJoin.round;
-    // 주변 시·군·구는 흐리게(위치감), 이 시·군·구는 그림자를 깔고 제 색으로.
-    for (final r in neighbors) {
-      if (r.id == city.id) continue;
+    // 주변 시·군·구는 흐리게(위치감), 여행지는 그림자를 깔고 제 색으로.
+    final mine = [for (final r in regions) if (shown.contains(r.id)) r];
+    for (final r in regions) {
+      if (shown.contains(r.id)) continue;
       canvas.drawPath(r.path, Paint()..color = AppColors.mapUnvisited);
       canvas.drawPath(r.path, white);
     }
     canvas.save();
     canvas.translate(0, 4 / s);
-    canvas.drawPath(city.path, Paint()..color = AppColors.mapShadow);
+    for (final r in mine) {
+      canvas.drawPath(r.path, Paint()..color = AppColors.mapShadow);
+    }
     canvas.restore();
-    canvas.drawPath(city.path, Paint()..color = city.fill);
-    canvas.drawPath(city.path, white..strokeWidth = 2 / s);
+    white.strokeWidth = (mine.length > 1 ? 1.4 : 2) / s;
+    for (final r in mine) {
+      canvas.drawPath(r.path, Paint()..color = r.fill);
+      canvas.drawPath(r.path, white);
+    }
     canvas.restore();
 
     // 핀: 번호 작은 것이 아래, 고른 핀은 맨 위.
@@ -274,7 +290,8 @@ class _PlannedMapPainter extends CustomPainter {
   bool shouldRepaint(_PlannedMapPainter old) =>
       old.layout.view != layout.view ||
       old.layout.scale != layout.scale ||
-      old.city != city ||
+      old.shown.length != shown.length ||
+      !old.shown.containsAll(shown) ||
       old.selected != selected ||
       old.pins.length != pins.length ||
       old.pins.entries.any((e) => pins[e.key]?.done != e.value.done || pins[e.key]?.at != e.value.at);

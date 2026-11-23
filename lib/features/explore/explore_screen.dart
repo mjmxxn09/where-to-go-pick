@@ -9,10 +9,11 @@ import '../korea_map/korea_map_data.dart';
 import '../korea_map/korea_map_view.dart';
 import '../shared/weather_icon.dart';
 import '../trip/trip_dates_sheet.dart';
+import '../trip/trip_models.dart';
 import '../votes/poll_screen.dart';
 import 'trip_candidates.dart';
 
-/// 2 · 여행지 고르기: 관심사(픽클 계정) → 도 → 시·군·구 → 여행 만들기.
+/// 2 · 여행지 고르기: 관심사(픽클 계정) → 도(전체로도 여행 가능) → 시·군·구 → 여행 만들기.
 class ExploreScreen extends StatefulWidget {
   const ExploreScreen({super.key, required this.onTripStarted});
 
@@ -121,7 +122,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
     if (city == null) return;
     final trips = AppScope.of(context).trip;
     final current = trips.trip;
-    final title = '${city.name.replaceAll(RegExp(r'(시|군|구)$'), '')} 여행 만들기';
+    final title = '${regionShortName(city.name)} 여행 만들기';
     final dates = await showTripDatesSheet(
       context,
       title: title,
@@ -227,7 +228,7 @@ class _Hint extends StatelessWidget {
         padding: const EdgeInsets.all(18),
         decoration: AppDecorations.card,
         child: const Text(
-          '도를 누르고, 가고 싶은 시·군·구를 골라봐!',
+          '도를 눌러 봐! 도 전체로도, 시·군·구까지 골라서도 여행을 만들 수 있어요.',
           textAlign: TextAlign.center,
           style: TextStyle(color: AppColors.textSecondary),
         ),
@@ -260,7 +261,12 @@ class _CityCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(city.provinceName, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                Text(
+                  city.isWholeProvince ? '전체 · 지도에서 시·군·구를 누르면 좁혀져요' : city.provinceName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                ),
                 Text(city.name, style: titleStyle(22)),
                 FutureBuilder<DayWeather>(
                   future: life.weather(cityId: city.id, date: DateTime.now()),
@@ -354,7 +360,7 @@ class _CandidateBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final names = candidates.map((c) => c.name.replaceAll(RegExp(r'(시|군|구)$'), '')).join(' · ');
+    final names = candidates.map((c) => regionShortName(c.name)).join(' · ');
     final n = candidates.length;
     return Container(
       constraints: const BoxConstraints(minHeight: 52),

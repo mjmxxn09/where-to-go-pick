@@ -81,13 +81,18 @@ function dedupe(rows: Ldong[]): Ldong[] {
 /**
  * 앱의 시·군·구를 법정동 코드로. 여러 개일 수 있다(앱에서 합친 시: 수원시 → 장안구·권선구…).
  * 도 안에서 이름이 같거나 "이름 + 구"로 시작하는 곳, 없으면 전국에서 같은 이름(군위군처럼 도가 바뀐 곳).
+ * [cityName]이 비면 도·광역시 전체: 시·군·구 코드가 빈 항목 하나(`signguCd: ""`).
  */
 export function matchCity(ldongs: Ldong[], provinceCode: string, cityName: string): Ldong[] {
   const short = SGIS_PROVINCE[provinceCode] ?? "";
   const norm = (s: string) => s.replace(/\s/g, "");
+  const inProvince = ldongs.filter((l) => provinceShort(l.regnNm) === short);
+  if (!norm(cityName)) {
+    const first = inProvince[0];
+    return first ? [{ regnCd: first.regnCd, regnNm: first.regnNm, signguCd: "", signguNm: "" }] : [];
+  }
   const alias = CITY_ALIASES[`${short}:${cityName}`];
   const target = norm(alias ?? cityName);
-  const inProvince = ldongs.filter((l) => provinceShort(l.regnNm) === short);
 
   const exact = inProvince.filter((l) => norm(l.signguNm) === target);
   if (exact.length) return exact;
@@ -201,6 +206,9 @@ function toPlaces(items: any[], { skipLodging }: { skipLodging: boolean }): Plac
 
 const placeCache = new TtlCache<Place[]>(6 * 60 * 60 * 1000);
 
+/** 시·군·구 코드 칸. 도 전체(빈 코드)면 빼서 도 전체를 묻는다. */
+const signgu = (c: Ldong): Record<string, string> => (c.signguCd ? { lDongSignguCd: c.signguCd } : {});
+
 export function loadPlaces(codes: Ldong[]): Promise<Place[]> {
   const use = codes.slice(0, 2); // 합친 시는 앞의 두 구만(호출 수 절약)
   const key = use.map((c) => `${c.regnCd}-${c.signguCd}`).join(",");
@@ -215,7 +223,7 @@ export function loadPlaces(codes: Ldong[]): Promise<Place[]> {
             arrange: "C", // 최근 수정순(사진 없는 곳도). 사진 있는 곳은 아래에서 앞으로
             contentTypeId: typeId,
             lDongRegnCd: c.regnCd,
-            lDongSignguCd: c.signguCd,
+            ...signgu(c),
           });
           return imageFirst(itemsOf(json, OK));
         })
@@ -264,7 +272,7 @@ export function loadCenter(codes: Ldong[]): Promise<{ lat: number; lng: number }
       arrange: "C",
       contentTypeId: "12",
       lDongRegnCd: c.regnCd,
-      lDongSignguCd: c.signguCd,
+      ...signgu(c),
     });
     return centerOf(toPlaces(itemsOf(json, OK), { skipLodging: true }));
   });

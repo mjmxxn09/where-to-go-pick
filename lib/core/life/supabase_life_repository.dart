@@ -130,6 +130,10 @@ DayWeather? dayWeatherFromJson(Object? json) {
   if (temperature == null || min == null || max == null) return null;
   final hourly = json['hourly'];
   final tip = json['tip'];
+  final now = json['now'];
+  double? d(Object? v) => v is num ? v.toDouble() : null;
+  final nowHour = now is Map<String, dynamic> ? n(now['hour']) : null;
+  final nowTemp = now is Map<String, dynamic> ? n(now['temperature']) : null;
   return DayWeather(
     sky: sky(json['sky']),
     temperature: temperature,
@@ -139,8 +143,18 @@ DayWeather? dayWeatherFromJson(Object? json) {
       if (hourly is List<dynamic>)
         for (final h in hourly)
           if (h is Map<String, dynamic> && n(h['hour']) != null && n(h['temperature']) != null)
-            HourlyWeather(hour: n(h['hour'])!, temperature: n(h['temperature'])!, sky: sky(h['sky'])),
+            HourlyWeather(hour: n(h['hour'])!, temperature: n(h['temperature'])!, sky: sky(h['sky']), pop: n(h['pop'])),
     ],
     tip: tip is String ? tip : null,
+    now: now is Map<String, dynamic> && nowHour != null && nowTemp != null
+        ? NowWeather(
+            hour: nowHour,
+            temperature: nowTemp,
+            sky: sky(now['sky']),
+            humidity: n(now['humidity']),
+            wind: d(now['wind']),
+            rain: d(now['rain']),
+          )
+        : null,
   );
 }

@@ -3,7 +3,7 @@
 // POST { action, provinceCode: "32", cityName: "강릉시", ... }   provinceCode는 앱 지도(통계청)의 도 코드.
 //   popular                → { source, sections: [{ key, label, places: [5곳] }] }   명소·맛집·카페·문화
 //   search  { query, page? } → { source, places, hasMore, outside }                 outside: 이 지역에 없어 전국에서 찾음
-//   weather { date? }      → { weather }
+//   weather { date? }      → { weather: { …, hourly(3시간 간격), now?(오늘이면 지금 날씨) } }
 //   places                 → { places }   (예전 앱용: 한국관광공사 목록)
 //
 // 비밀값: DATA_GO_KR_SERVICE_KEY (공공데이터포털 일반 인증키, Decoding 값), KAKAO_REST_API_KEY (카카오 REST API 키)
@@ -11,7 +11,7 @@
 import { isAppUser } from "./auth.ts";
 import { brief } from "./brief.ts";
 import { UpstreamError } from "./datago.ts";
-import { kst, loadForecast, summarize, toGrid } from "./kma.ts";
+import { kst, loadForecast, loadNow, nowFrom, summarize, toGrid } from "./kma.ts";
 import { hasKakao, popularSections, searchKakao } from "./kakao.ts";
 import { type Ldong, loadCenter, loadLdongs, loadPlaces, matchCity, type Place, searchPlaces } from "./tour.ts";
 
@@ -93,8 +93,19 @@ Deno.serve(async (req) => {
       const today = kst(now).ymd;
       const ymd = typeof body.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.date) ? body.date.replaceAll("-", "") : today;
       const { nx, ny } = toGrid(center.lat, center.lng);
-      const weather = summarize(await loadForecast(nx, ny, now), ymd, ymd === today ? kst(now).hour : null);
+      const isToday = ymd === today;
+      const weather = summarize(await loadForecast(nx, ny, now), ymd, isToday ? kst(now).hour : null);
       if (!weather) throw new UpstreamError("NO_FORECAST", "그날 예보가 아직 없어요.");
+      if (isToday) {
+        // 지금 날씨(초단기실황). 못 받아도 예보는 그대로 보낸다.
+        try {
+          const { items, hour } = await loadNow(nx, ny, now);
+          const current = nowFrom(items, hour, weather.sky);
+          if (current) weather.now = current;
+        } catch (e) {
+          console.warn("초단기실황 실패", e instanceof Error ? e.message : e);
+        }
+      }
       return json(200, { weather });
     }
     return fail(400, "BAD_REQUEST", "알 수 없는 action이에요.");

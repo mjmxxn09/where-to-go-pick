@@ -1,7 +1,7 @@
 // deno test -A supabase/functions/life/life_test.ts
 import { deepStrictEqual as assertEquals, ok as assert } from "node:assert";
 import { itemsOf, xmlError } from "./datago.ts";
-import { kst, latestBase, summarize, toGrid } from "./kma.ts";
+import { kst, latestBase, nowBase, nowFrom, summarize, toGrid } from "./kma.ts";
 import { areaHint, centerOf, classify, imageFirst, loadLdongs, loadPlaces, matchCity, provinceShort, searchPlaces, toPlace } from "./tour.ts";
 
 Deno.test("격자 변환: 기상청 예시 좌표", () => {
@@ -39,10 +39,39 @@ Deno.test("하루 요약: 지금 이후 시간, 비 소식 팁, TMN·TMX 우선"
   assertEquals(w.sky, "sunny");
   assertEquals(w.max, 21);
   assertEquals(w.min, 12);
-  assertEquals(w.hourly.map((h) => h.hour), [18, 21]);
+  assertEquals(w.hourly.map((h) => h.hour), [18, 21], "지금(첫 예보 15시) 다음부터 3시간 간격으로 그날 끝까지");
   assertEquals(w.hourly[1].sky, "rainy");
   assertEquals(w.tip, "비 소식이 있어요. 우산 챙기기!");
   assertEquals(summarize(items, "20261125", null), null);
+});
+
+Deno.test("다른 날: 0·3·6…21시, 강수확률", () => {
+  const d = "20261124";
+  const items = [...Array(24).keys()].flatMap((h) => [
+    fcst(d, h, "TMP", 5 + Math.floor(h / 3)),
+    fcst(d, h, "SKY", 3),
+    fcst(d, h, "PTY", h >= 18 ? 1 : 0),
+    fcst(d, h, "POP", h >= 18 ? 70 : 20),
+  ]);
+  const w = summarize(items, d, null)!;
+  assertEquals(w.hourly.map((h) => h.hour), [0, 3, 6, 9, 12, 15, 18, 21]);
+  assertEquals(w.hourly[0].pop, 20);
+  assertEquals(w.hourly[6], { hour: 18, temperature: 11, sky: "rainy", pop: 70 });
+  assertEquals(w.temperature, 8, "다른 날 대표 기온은 9시");
+});
+
+Deno.test("지금 날씨(초단기실황): 45분 전이면 한 시간 전 자료, 하늘은 예보로, 비·눈은 실황 우선", () => {
+  const at = (s: string) => new Date(s);
+  assertEquals(nowBase(at("2026-11-20T14:50:00+09:00")), { baseDate: "20261120", baseTime: "1400", hour: 14 });
+  assertEquals(nowBase(at("2026-11-20T14:20:00+09:00")), { baseDate: "20261120", baseTime: "1300", hour: 13 });
+  assertEquals(nowBase(at("2026-11-21T00:10:00+09:00")), { baseDate: "20261120", baseTime: "2300", hour: 23 });
+  const obs = (c: string, v: number | string) => ({ category: c, obsrValue: String(v) });
+  assertEquals(nowFrom([obs("T1H", 12.6), obs("REH", 55), obs("WSD", 3.24), obs("PTY", 0)], 14, "sunny"), {
+    hour: 14, temperature: 13, sky: "sunny", humidity: 55, wind: 3.2,
+  });
+  assertEquals(nowFrom([obs("T1H", 1), obs("PTY", 3), obs("RN1", 0.5)], 7, "sunny")!.sky, "snowy");
+  assertEquals(nowFrom([obs("T1H", 9), obs("PTY", 0)], 7, "rainy")!.sky, "cloudy", "예보는 비지만 지금은 안 온다");
+  assertEquals(nowFrom([obs("REH", 50)], 7, "sunny"), null);
 });
 
 Deno.test("공공데이터 오류: XML 본문과 결과 코드", () => {

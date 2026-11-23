@@ -237,9 +237,12 @@ class _CityCard extends StatelessWidget {
                     if (w == null) return const SizedBox(height: 18);
                     return Row(
                       children: [
-                        WeatherIcon(sky: w.sky, size: 16),
+                        WeatherIcon(sky: w.now?.sky ?? w.sky, size: 16),
                         const SizedBox(width: 4),
-                        Text('오늘 ${w.temperature}° · 최저 ${w.min}°',
+                        Text(
+                            w.now != null
+                                ? '지금 ${w.now!.temperature}° · 최저 ${w.min}° 최고 ${w.max}°'
+                                : '오늘 ${w.temperature}° · 최저 ${w.min}°',
                             style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
                       ],
                     );

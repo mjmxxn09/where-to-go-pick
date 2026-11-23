@@ -1,8 +1,10 @@
-// 기상청 단기예보 조회서비스(VilageFcstInfoService_2.0): 위경도 → 격자, 발표 시각, 하루 요약.
+// 기상청 단기예보 조회서비스(VilageFcstInfoService_2.0): 위경도 → 격자, 발표 시각, 하루 요약(3시간 간격),
+// 지금 날씨(초단기실황 getUltraSrtNcst — 같은 서비스라 키 그대로).
 
 import { getJson, itemsOf, TtlCache } from "./datago.ts";
 
 const BASE = "https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getVilageFcst";
+const NOW_BASE = "https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getUltraSrtNcst";
 
 /** 기상청 격자 변환(람베르트 정각원추, 기상청 제공 공식). */
 export function toGrid(lat: number, lng: number): { nx: number; ny: number } {
@@ -45,10 +47,23 @@ export function latestBase(now: Date): { baseDate: string; baseTime: string } {
 }
 
 export type Sky = "sunny" | "cloudy" | "rainy" | "snowy";
-export type Hourly = { hour: number; temperature: number; sky: Sky };
-export type DayWeather = { sky: Sky; temperature: number; min: number; max: number; hourly: Hourly[]; tip: string | null };
+/** 3시간 간격 한 칸. pop은 강수확률(%). */
+export type Hourly = { hour: number; temperature: number; sky: Sky; pop?: number };
 
-type Slot = { tmp?: number; sky?: string; pty?: string };
+/** 지금 날씨(초단기실황). hour는 관측 시각(정시). */
+export type NowWeather = { hour: number; temperature: number; sky: Sky; humidity?: number; wind?: number; rain?: number };
+
+export type DayWeather = {
+  sky: Sky;
+  temperature: number;
+  min: number;
+  max: number;
+  hourly: Hourly[];
+  tip: string | null;
+  now?: NowWeather;
+};
+
+type Slot = { tmp?: number; sky?: string; pty?: string; pop?: number };
 
 function skyOf(slot: Slot): Sky {
   switch (slot.pty) {
@@ -59,8 +74,9 @@ function skyOf(slot: Slot): Sky {
 }
 
 /**
- * 예보 항목들을 [ymd] 하루로 요약한다. 오늘이면 [nowHour] 이후만 시간별로 보여 준다.
- * TMN·TMX(최저·최고)가 없으면(늦은 발표) 그날 TMP의 최소·최대로 대신한다.
+ * 예보 항목들을 [ymd] 하루로 요약한다.
+ * - 시간별(3시간 간격): 오늘이면 [nowHour] 다음부터 그날 끝까지, 다른 날이면 0·3·6…21시.
+ * - TMN·TMX(최저·최고)가 없으면(늦은 발표) 그날 TMP의 최소·최대로 대신한다.
  */
 export function summarize(items: any[], ymd: string, nowHour: number | null): DayWeather | null {
   const slots = new Map<number, Slot>();
@@ -75,6 +91,7 @@ export function summarize(items: any[], ymd: string, nowHour: number | null): Da
       case "TMP": slot.tmp = Number(value); break;
       case "SKY": slot.sky = value; break;
       case "PTY": slot.pty = value; break;
+      case "POP": slot.pop = Number(value); break;
       case "TMN": tmn = Number(value); break;
       case "TMX": tmx = Number(value); break;
     }
@@ -90,9 +107,11 @@ export function summarize(items: any[], ymd: string, nowHour: number | null): Da
   const current = hours.find((h) => h >= from) ?? hours[hours.length - 1];
   const nowSlot = slots.get(current)!;
   const hourly = hours
-    .filter((h) => h > current && (h - current) % 3 === 0)
-    .slice(0, 3) // 화면 한 줄에 셋까지
-    .map((h) => ({ hour: h, temperature: Math.round(slots.get(h)!.tmp!), sky: skyOf(slots.get(h)!) }));
+    .filter((h) => (nowHour == null ? h % 3 === 0 : h > current && (h - current) % 3 === 0))
+    .map((h) => {
+      const s = slots.get(h)!;
+      return { hour: h, temperature: Math.round(s.tmp!), sky: skyOf(s), ...(s.pop != null && !Number.isNaN(s.pop) ? { pop: s.pop } : {}) };
+    });
   const later = hours.filter((h) => h >= current).map((h) => skyOf(slots.get(h)!));
 
   let tip: string | null = null;
@@ -103,6 +122,57 @@ export function summarize(items: any[], ymd: string, nowHour: number | null): Da
   else if (max - min >= 10) tip = "일교차가 커요. 겉옷 챙기기!";
 
   return { sky: skyOf(nowSlot), temperature: Math.round(nowSlot.tmp!), min, max, hourly, tip };
+}
+
+/** 초단기실황 발표 시각: 정시 자료가 40분쯤 올라온다 → 45분 전이면 한 시간 전 자료. */
+export function nowBase(now: Date): { baseDate: string; baseTime: string; hour: number } {
+  const at = kst(now);
+  const t = at.minute < 45 ? new Date(now.getTime() - 60 * 60 * 1000) : now;
+  const k = kst(t);
+  return { baseDate: k.ymd, baseTime: `${String(k.hour).padStart(2, "0")}00`, hour: k.hour };
+}
+
+/**
+ * 초단기실황 항목 → 지금 날씨. 하늘(맑음·흐림)은 실황에 없어서 [forecastSky](그 시각 예보)로, 비·눈이면 실황 우선.
+ * 기온(T1H)이 없으면 null.
+ */
+export function nowFrom(items: any[], hour: number, forecastSky: Sky): NowWeather | null {
+  const v: Record<string, number> = {};
+  for (const it of items) {
+    const n = Number(it.obsrValue);
+    if (typeof it.category === "string" && !Number.isNaN(n)) v[it.category] = n;
+  }
+  if (v.T1H == null) return null;
+  const pty = v.PTY;
+  const sky: Sky = pty === 3 || pty === 7 ? "snowy" : pty != null && pty > 0 ? "rainy" : forecastSky === "rainy" || forecastSky === "snowy" ? "cloudy" : forecastSky;
+  return {
+    hour,
+    temperature: Math.round(v.T1H),
+    sky,
+    ...(v.REH != null ? { humidity: Math.round(v.REH) } : {}),
+    ...(v.WSD != null ? { wind: Math.round(v.WSD * 10) / 10 } : {}),
+    ...(v.RN1 != null && v.RN1 > 0 ? { rain: v.RN1 } : {}),
+  };
+}
+
+const nowCache = new TtlCache<any[]>(10 * 60 * 1000);
+
+export function loadNow(nx: number, ny: number, now: Date): Promise<{ items: any[]; hour: number }> {
+  const { baseDate, baseTime, hour } = nowBase(now);
+  return nowCache
+    .get(`${nx},${ny},${baseDate}${baseTime}`, async () => {
+      const json = await getJson(NOW_BASE, {
+        pageNo: 1,
+        numOfRows: 20,
+        dataType: "JSON",
+        base_date: baseDate,
+        base_time: baseTime,
+        nx,
+        ny,
+      });
+      return itemsOf(json, ["00"]);
+    })
+    .then((items) => ({ items, hour }));
 }
 
 const forecastCache = new TtlCache<any[]>(30 * 60 * 1000);

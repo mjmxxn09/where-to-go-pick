@@ -35,8 +35,8 @@ class _TripScreenState extends State<TripScreen> {
   Future<PopularPlaces>? _popular;
   Future<DayWeather>? _weather;
 
-  /// 날씨를 아직 보여 줄 수 없을 때 한 줄(출발이 3일보다 더 남았을 때).
-  String? _weatherNote;
+  /// 날씨 카드가 보여 주는 날(날짜 칸을 따라간다).
+  WeatherPick? _weatherPick;
 
   /// 다녀온 곳에 준 "나도 한 표".
   Set<String> _myVotes = {};
@@ -126,21 +126,24 @@ class _TripScreenState extends State<TripScreen> {
   }
 
   void _ensureLoaded(Trip trip) {
-    final scope = AppScope.of(context);
-    // 날씨: 출발 전이면 출발일(단기예보는 3일 앞까지), 여행 중이면 오늘.
+    _ensureCity(trip);
+    _ensureWeather(trip);
+  }
+
+  /// 날씨: 날짜 칸에서 고른 날. 전체면 여행 중엔 오늘, 출발 전엔 출발일.
+  void _ensureWeather(Trip trip) {
     final now = DateTime.now();
-    final until = daysBetween(now, trip.startDate);
-    final weatherKey = '${trip.cityId}|${until > 0 ? dateOnly(trip.startDate) : dateOnly(now)}';
-    if (_weatherKey != weatherKey) {
-      _weatherKey = weatherKey;
-      if (until > 2) {
-        _weather = null;
-        _weatherNote = '출발 3일 전부터 ${monthDayLabel(trip.startDate)} 날씨가 보여요.';
-      } else {
-        _weatherNote = null;
-        _weather = scope.life.weather(cityId: trip.cityId, date: until > 0 ? trip.startDate : now);
-      }
-    }
+    final pick = weatherPickFor(trip, _dayInRange(trip, _planDay), now);
+    final date = pick.date;
+    final key = '${trip.cityId}|${date ?? pick.note}';
+    if (_weatherKey == key) return;
+    _weatherKey = key;
+    _weatherPick = pick;
+    _weather = date == null ? null : AppScope.of(context).life.weather(cityId: trip.cityId, date: date);
+  }
+
+  void _ensureCity(Trip trip) {
+    final scope = AppScope.of(context);
     if (_loadedCity == trip.cityId) return;
     _loadedCity = trip.cityId;
     _popular = scope.life.popular(cityId: trip.cityId);
@@ -523,7 +526,7 @@ class _TripScreenState extends State<TripScreen> {
           ),
         ],
         const SizedBox(height: Gap.s + 4),
-        _WeatherCard(future: _weather, note: _weatherNote),
+        _WeatherCard(future: _weather, pick: _weatherPick),
         const SizedBox(height: Gap.s + 4),
         ..._plannedSection(context, controller, trip),
         const SizedBox(height: Gap.m),
@@ -644,16 +647,48 @@ extension on Set<String> {
   void toggle(String value, bool on) => on ? add(value) : remove(value);
 }
 
+/// 날씨 카드가 보여 줄 날. [date]가 null이면 예보가 없는 날이라 [note]만 보여 준다.
+class WeatherPick {
+  const WeatherPick({required this.label, this.date, this.note, this.isToday = false});
+
+  /// 카드 머리말(예: "오늘 날씨", "2일차 · 11월 24일 (화)").
+  final String label;
+  final DateTime? date;
+  final String? note;
+  final bool isToday;
+}
+
+/// 단기예보는 오늘부터 사흘 뒤까지 있다.
+const weatherForecastDays = 3;
+
+/// 날짜 칸([day], null = 전체)에 맞는 날씨 날. 전체면 여행 중엔 오늘, 출발 전엔 출발일, 끝났으면 오늘.
+WeatherPick weatherPickFor(Trip trip, int? day, DateTime now) {
+  final today = dateOnly(now);
+  final start = dateOnly(trip.startDate);
+  final date = day != null
+      ? start.add(Duration(days: day))
+      : (today.isBefore(start) ? start : today);
+  final ahead = daysBetween(today, date);
+  final when = date == today ? '오늘' : monthDayLabel(date);
+  final label = day != null ? '${day + 1}일차 · $when' : (date == today ? '오늘 날씨' : '출발일 · $when');
+  if (ahead < 0) return WeatherPick(label: label, note: '지난 날이라 예보가 없어요.');
+  if (ahead > weatherForecastDays) {
+    return WeatherPick(label: label, note: '$when 날씨는 ${weatherForecastDays}일 전부터 보여요.');
+  }
+  return WeatherPick(label: label, date: date, isToday: ahead == 0);
+}
+
 class _WeatherCard extends StatelessWidget {
-  const _WeatherCard({required this.future, this.note});
+  const _WeatherCard({required this.future, required this.pick});
 
   final Future<DayWeather>? future;
+  final WeatherPick? pick;
 
-  /// 날씨 대신 보여 줄 한 줄(예: 출발이 많이 남았을 때).
-  final String? note;
+  static const _sub = TextStyle(fontSize: 12, color: AppColors.textSecondary);
 
   @override
   Widget build(BuildContext context) {
+    final pick = this.pick;
     return FutureBuilder<DayWeather>(
       future: future,
       builder: (context, snap) {
@@ -661,44 +696,104 @@ class _WeatherCard extends StatelessWidget {
         return Container(
           padding: const EdgeInsets.all(12),
           decoration: AppDecorations.card,
-          child: w == null
-              ? SizedBox(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (pick != null) Text(pick.label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 6),
+              if (w == null)
+                SizedBox(
                   height: 56,
                   child: Center(
-                    child: note != null
-                        ? Text(note!, textAlign: TextAlign.center, style: const TextStyle(color: AppColors.textSecondary))
+                    child: pick?.note != null
+                        ? Text(pick!.note!, textAlign: TextAlign.center, style: const TextStyle(color: AppColors.textSecondary))
                         : snap.hasError
-                            ? const Text('날씨를 불러오지 못했어요.', style: TextStyle(color: AppColors.textSecondary))
+                            ? const Text('그날 예보가 아직 없거나 불러오지 못했어요.', style: TextStyle(color: AppColors.textSecondary))
                             : const CircularProgressIndicator(),
                   ),
                 )
-              : Row(
-                  children: [
-                    WeatherIcon(sky: w.sky, size: 28),
-                    const SizedBox(width: 8),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('${w.temperature}°', style: titleStyle(24)),
-                        Text('${skyLabel(w.sky)} · 최저 ${w.min}° 최고 ${w.max}°',
-                            style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-                      ],
+              else ...[
+                _head(w),
+                if (w.hourly.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    height: 84,
+                    child: ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: w.hourly.length,
+                      separatorBuilder: (_, __) => const SizedBox(width: 6),
+                      itemBuilder: (context, i) => _HourCell(hour: w.hourly[i]),
                     ),
-                    const Spacer(),
-                    for (final h in w.hourly)
-                      Padding(
-                        padding: const EdgeInsets.only(left: 6),
-                        child: Column(
-                          children: [
-                            Text('${h.hour}시', style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
-                            Text('${h.temperature}°', style: const TextStyle(fontWeight: FontWeight.w700)),
-                          ],
-                        ),
-                      ),
-                  ],
-                ),
+                  ),
+                ],
+                if (w.tip != null) ...[
+                  const SizedBox(height: 6),
+                  Text(w.tip!, style: _sub),
+                ],
+              ],
+            ],
+          ),
         );
       },
+    );
+  }
+
+  /// 오늘이면 지금 날씨(관측), 다른 날이면 그날 대표.
+  Widget _head(DayWeather w) {
+    final now = w.now;
+    final extra = [
+      if (now?.humidity != null) '습도 ${now!.humidity}%',
+      if (now?.wind != null) '바람 ${now!.wind!.toStringAsFixed(1)}m/s',
+      if (now?.rain != null) '비 ${now!.rain}mm',
+    ];
+    return Row(
+      children: [
+        WeatherIcon(sky: now?.sky ?? w.sky, size: 32),
+        const SizedBox(width: 10),
+        Text('${now?.temperature ?? w.temperature}°', style: titleStyle(28)),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(now != null ? '지금 ${skyLabel(now.sky)} · ${now.hour}시 관측' : skyLabel(w.sky),
+                  style: const TextStyle(fontWeight: FontWeight.w700)),
+              Text(
+                ['최저 ${w.min}° 최고 ${w.max}°', ...extra].join(' · '),
+                maxLines: 2,
+                style: _sub,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// 3시간 간격 한 칸: 시각 · 하늘 · 기온 · 강수확률(20% 이상일 때).
+class _HourCell extends StatelessWidget {
+  const _HourCell({required this.hour});
+
+  final HourlyWeather hour;
+
+  @override
+  Widget build(BuildContext context) {
+    final pop = hour.pop;
+    return Container(
+      width: 48,
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      decoration: BoxDecoration(color: const Color(0xFFF6F3FF), borderRadius: BorderRadius.circular(10)),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text('${hour.hour}시', style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+          WeatherIcon(sky: hour.sky, size: 16),
+          Text('${hour.temperature}°', style: const TextStyle(fontWeight: FontWeight.w700)),
+          Text(pop != null && pop >= 20 ? '$pop%' : ' ',
+              style: const TextStyle(fontSize: 10, color: Color(0xFF3B82F6))),
+        ],
+      ),
     );
   }
 }

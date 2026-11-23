@@ -4,12 +4,26 @@ import '../votes/vote_repository.dart';
 /// 하늘 상태(기상청 단기예보 SKY·PTY를 앱용으로 단순화).
 enum Sky { sunny, cloudy, rainy, snowy }
 
+/// 3시간 간격 한 칸. [pop]은 강수확률(%), 모르면 null.
 class HourlyWeather {
-  const HourlyWeather({required this.hour, required this.temperature, required this.sky});
+  const HourlyWeather({required this.hour, required this.temperature, required this.sky, this.pop});
 
   final int hour;
   final int temperature;
   final Sky sky;
+  final int? pop;
+}
+
+/// 지금 날씨(기상청 초단기실황, [hour]시 관측). 습도(%)·바람(m/s)·1시간 강수량(mm)은 없을 수 있다.
+class NowWeather {
+  const NowWeather({required this.hour, required this.temperature, required this.sky, this.humidity, this.wind, this.rain});
+
+  final int hour;
+  final int temperature;
+  final Sky sky;
+  final int? humidity;
+  final double? wind;
+  final double? rain;
 }
 
 class DayWeather {
@@ -20,14 +34,21 @@ class DayWeather {
     required this.max,
     required this.hourly,
     this.tip,
+    this.now,
   });
 
+  /// 그날 대표(오늘이면 지금 즈음 예보, 다른 날이면 9시).
   final Sky sky;
   final int temperature;
   final int min;
   final int max;
+
+  /// 3시간 간격(오늘이면 지금 다음부터 그날 끝까지, 다른 날이면 0·3…21시).
   final List<HourlyWeather> hourly;
   final String? tip;
+
+  /// 오늘이면 지금 날씨(관측). 다른 날이거나 못 받았으면 null.
+  final NowWeather? now;
 }
 
 /// 명소·맛집 추천 한 건(TourAPI + 픽클 '다녀온 사람 표' 순위를 생활 서버가 합쳐서 내려줄 형태).
@@ -118,18 +139,29 @@ class FixtureLifeRepository implements LifeRepository {
   const FixtureLifeRepository();
 
   @override
-  Future<DayWeather> weather({required String cityId, required DateTime date}) async => const DayWeather(
-        sky: Sky.sunny,
-        temperature: 14,
-        min: 6,
-        max: 15,
-        hourly: [
-          HourlyWeather(hour: 15, temperature: 15, sky: Sky.sunny),
-          HourlyWeather(hour: 18, temperature: 11, sky: Sky.cloudy),
-          HourlyWeather(hour: 21, temperature: 8, sky: Sky.cloudy),
-        ],
-        tip: '저녁엔 쌀쌀해. 겉옷 챙겨!',
-      );
+  Future<DayWeather> weather({required String cityId, required DateTime date}) async {
+    final now = DateTime.now();
+    final today = date.year == now.year && date.month == now.month && date.day == now.day;
+    const temps = [6, 5, 7, 11, 14, 15, 11, 8];
+    return DayWeather(
+      sky: Sky.sunny,
+      temperature: 14,
+      min: 5,
+      max: 15,
+      hourly: [
+        for (var i = 0; i < 8; i++)
+          if (!today || i * 3 > now.hour)
+            HourlyWeather(
+              hour: i * 3,
+              temperature: temps[i],
+              sky: i >= 6 ? Sky.cloudy : Sky.sunny,
+              pop: i >= 6 ? 30 : 10,
+            ),
+      ],
+      tip: '저녁엔 쌀쌀해. 겉옷 챙겨!',
+      now: today ? NowWeather(hour: now.hour, temperature: 13, sky: Sky.sunny, humidity: 55, wind: 2.4) : null,
+    );
+  }
 
   @override
   Future<List<PlaceSuggestion>> places({required String cityId, required List<String> interestKeys}) async => const [

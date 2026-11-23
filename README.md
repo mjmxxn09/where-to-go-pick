@@ -48,6 +48,21 @@ flutter build apk --dart-define-from-file=env/prod.json
 픽클 서버 주소를 넣으면 Supabase 함수 `pickle-exchange`의 `PICKLE_API_BASE_URL`·`PICKLE_ENV`도 **같은 서버**로 맞춰야 해요
 (`docs/supabase.md` 5번). 앱은 개발, 함수는 상용처럼 엇갈리면 픽클 로그인 후 기록이 안 올라가요.
 
+#### 픽클 개발 서버가 내 PC(localhost)일 때
+
+폰·에뮬레이터에서 `localhost`는 **폰 자신**이라 PC 서버에 닿지 않아요.
+
+| 어디서 실행 | `PICKLE_API_BASE_URL` |
+|---|---|
+| 안드로이드 에뮬레이터 | `http://10.0.2.2:포트` (에뮬레이터에서 PC를 가리키는 주소) |
+| 실제 폰(같은 와이파이) | `http://PC의 IP:포트` (`ipconfig`의 IPv4, 예: 192.168.0.12). 서버는 `0.0.0.0`으로 열고 Windows 방화벽에서 그 포트 허용 |
+| 어디서든 + Supabase까지 | 터널 주소(`cloudflared tunnel --url http://localhost:포트` → `https://….trycloudflare.com`) |
+
+- `http://` 주소는 debug 빌드에서만 열려요(`android/app/src/debug/AndroidManifest.xml`의 `usesCleartextTraffic`). 출시 빌드는 `https`만.
+- Supabase 함수 `pickle-exchange`는 인터넷에 있어서 내 PC의 `localhost`·`192.168…`에 닿지 못해요.
+  그래서 localhost 개발 서버로는 **픽클 로그인·내 픽클 친구**까지만 되고, 여행 기록은 폰에만 남아요(502 `PICKLE_UNAVAILABLE`, 나중에 붙으면 올라가요).
+  기록 올리기까지 해 보려면 터널 주소를 앱과 함수(`PICKLE_API_BASE_URL`, `PICKLE_ENV=dev`) 둘 다에 넣어요. 터널 주소는 켤 때마다 바뀌어서 그때마다 `secrets set`을 다시 해요.
+
 | 키 | 뜻 |
 |---|---|
 | `SAMPLE_MODE` | `true`면 서버 없이 예시 데이터 |

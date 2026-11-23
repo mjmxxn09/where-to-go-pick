@@ -1,15 +1,18 @@
-// 여행지 정보: 명소·맛집(한국관광공사 TourAPI)과 날씨(기상청 단기예보).
+// 여행지 정보: 인기 장소·검색(카카오맵, 없으면 한국관광공사 TourAPI)과 날씨(기상청 단기예보).
 //
-// POST { action: "places" | "weather" | "search", provinceCode: "32", cityName: "강릉시", date?: "2026-11-20", query?: "커피" }
-//   provinceCode는 앱 지도(통계청)의 도 코드(시·군·구 id 앞 두 자리).
-// 응답: { places: [...] } 또는 { weather: {...} }
+// POST { action, provinceCode: "32", cityName: "강릉시", ... }   provinceCode는 앱 지도(통계청)의 도 코드.
+//   popular                → { source, sections: [{ key, label, places: [5곳] }] }   명소·맛집·카페·문화
+//   search  { query, page? } → { source, places, hasMore, outside }                 outside: 이 지역에 없어 전국에서 찾음
+//   weather { date? }      → { weather }
+//   places                 → { places }   (예전 앱용: 한국관광공사 목록)
 //
-// 비밀값: DATA_GO_KR_SERVICE_KEY (공공데이터포털 일반 인증키, Decoding 값)
+// 비밀값: DATA_GO_KR_SERVICE_KEY (공공데이터포털 일반 인증키, Decoding 값), KAKAO_REST_API_KEY (카카오 REST API 키)
 
 import { isAppUser } from "./auth.ts";
 import { UpstreamError } from "./datago.ts";
 import { kst, loadForecast, summarize, toGrid } from "./kma.ts";
-import { type Ldong, loadCenter, loadLdongs, loadPlaces, matchCity, searchPlaces } from "./tour.ts";
+import { hasKakao, popularSections, searchKakao } from "./kakao.ts";
+import { type Ldong, loadCenter, loadLdongs, loadPlaces, matchCity, type Place, searchPlaces } from "./tour.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -29,8 +32,19 @@ async function codesFor(provinceCode: string, cityName: string): Promise<Ldong[]
   return codes;
 }
 
-const brief = (places: { id: string; name: string; type: string; meta: string }[]) =>
-  places.map(({ id, name, type, meta }) => ({ id, name, type, meta }));
+const brief = (places: (Place & { url?: string })[]) =>
+  places.map(({ id, name, type, meta, url }) => (url ? { id, name, type, meta, url } : { id, name, type, meta }));
+
+/** 카카오 키가 없을 때: 한국관광공사 목록을 같은 칸으로 나눠 앞에서 5곳씩(사진 있는 곳이 앞). */
+function sectionsFromTour(places: Place[], per = 5) {
+  const pick = (types: string[]) => places.filter((p) => types.includes(p.type)).slice(0, per);
+  return [
+    { key: "sights", label: "명소", places: pick(["nature", "beach", "heritage", "leisure", "other"]) },
+    { key: "food", label: "맛집", places: pick(["food", "seafood", "market"]) },
+    { key: "cafe", label: "카페", places: pick(["cafe"]) },
+    { key: "culture", label: "문화", places: pick(["culture"]) },
+  ].map((s) => ({ ...s, places: brief(s.places) }));
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -50,17 +64,28 @@ Deno.serve(async (req) => {
     return fail(400, "BAD_REQUEST", "provinceCode(두 자리)와 cityName이 필요해요.");
   }
 
-  if (!["places", "weather", "search"].includes(action)) {
-    return fail(400, "BAD_REQUEST", "action은 places, weather, search 중 하나예요.");
+  if (!["places", "weather", "search", "popular"].includes(action)) {
+    return fail(400, "BAD_REQUEST", "action은 popular, search, weather, places 중 하나예요.");
   }
 
   try {
-    const codes = await codesFor(provinceCode, cityName);
+    if (action === "popular" && hasKakao()) {
+      const sections = await popularSections(provinceCode, cityName);
+      return json(200, { source: "kakao", sections: sections.map((s) => ({ ...s, places: brief(s.places) })) });
+    }
     if (action === "search") {
       const query = String(body?.query ?? "").trim();
       if (!query || query.length > 40) return fail(400, "BAD_REQUEST", "query(1~40자)가 필요해요.");
-      return json(200, { places: brief(await searchPlaces(codes, query)) });
+      const page = Math.min(3, Math.max(1, Number(body?.page) || 1));
+      if (hasKakao()) {
+        const r = await searchKakao(provinceCode, cityName, query, page);
+        return json(200, { source: "kakao", places: brief(r.places), hasMore: r.hasMore, outside: r.outside });
+      }
+      const codes = await codesFor(provinceCode, cityName);
+      return json(200, { source: "tour", places: brief(await searchPlaces(codes, query)), hasMore: false, outside: false });
     }
+    const codes = await codesFor(provinceCode, cityName);
+    if (action === "popular") return json(200, { source: "tour", sections: sectionsFromTour(await loadPlaces(codes)) });
     if (action === "places") return json(200, { places: brief(await loadPlaces(codes)) });
     if (action === "weather") {
       const center = await loadCenter(codes);

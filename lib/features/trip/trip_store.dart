@@ -57,7 +57,13 @@ CheckIn? checkInFromJson(Object? json) {
   return CheckIn(id: id, placeName: name, type: placeTypeFromName(json['type']), at: at.toLocal());
 }
 
-Map<String, Object?> plannedToJson(PlannedPlace p) => {'id': p.id, 'name': p.name, 'type': p.type.name, 'meta': p.meta};
+Map<String, Object?> plannedToJson(PlannedPlace p) => {
+      'id': p.id,
+      'name': p.name,
+      'type': p.type.name,
+      'meta': p.meta,
+      if (p.url != null) 'url': p.url,
+    };
 
 PlannedPlace? plannedFromJson(Object? json) {
   if (json is! Map<String, dynamic>) return null;
@@ -65,7 +71,14 @@ PlannedPlace? plannedFromJson(Object? json) {
   final name = json['name'];
   if (id is! String || name is! String) return null;
   final meta = json['meta'];
-  return PlannedPlace(id: id, name: name, type: placeTypeFromName(json['type']), meta: meta is String ? meta : '');
+  final url = json['url'];
+  return PlannedPlace(
+    id: id,
+    name: name,
+    type: placeTypeFromName(json['type']),
+    meta: meta is String ? meta : '',
+    url: url is String && url.startsWith('http') ? url : null,
+  );
 }
 
 List<PlannedPlace> plannedListFromJson(Object? list) => [

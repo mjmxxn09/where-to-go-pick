@@ -32,18 +32,23 @@
 | `lib/features/trip/trip_store.dart` | 폰 저장(`trips.v1`), 기록 합치기 |
 | `lib/features/trip/trip_cloud.dart` | 여행·체크인 ↔ 서버 행 |
 | `lib/features/trip_card/card_cloud.dart` | 카드 꾸미기 ↔ 서버 행(바뀐 쪽만, 손을 멈추고 2초 뒤 올림) |
-| `supabase/functions/life/` | 여행지 정보: 법정동 코드 찾기(`tour.ts`), 격자 변환·예보 요약(`kma.ts`), 호출자 확인(`auth.ts`) |
+| `supabase/functions/life/` | 여행지 정보: 법정동 코드 찾기(`tour.ts`), 카카오 인기·검색(`kakao.ts`), 격자 변환·예보 요약(`kma.ts`), 호출자 확인(`auth.ts`) |
 | `lib/core/life/supabase_life_repository.dart` | 앱 쪽: 지도 id → 도 코드·시 이름으로 `life` 호출, 장소는 앱 켜진 동안·날씨는 한 시간 캐시 |
 
 ## 여행지 정보 (Edge Function `life`)
 
-- `POST {action: "places" | "weather" | "search", provinceCode: "32", cityName: "강릉시", date?, query?}` — 이 앱 사용자 토큰만 받는다(공공데이터 호출량 보호).
-- 장소: 법정동 시·군·구 목록(`ldongCode2`, 하루 캐시)에서 도시를 찾고, 관광지 40·음식점 30·문화시설 10·레포츠 10·쇼핑 10곳(`areaBasedList2`, 사진 있는 곳 먼저, 숙박 제외, 6시간 캐시).
-- 검색: `searchKeyword2`로 그 시·군·구에서, 없으면 도 전체에서 30곳(1시간 캐시). 숙박도 포함.
+- `POST {action: "popular" | "search" | "weather" | "places", provinceCode: "32", cityName: "강릉시", date?, query?, page?}` — 이 앱 사용자 토큰만 받는다(공공데이터·카카오 호출량 보호).
+- **인기 장소(`popular`)** — 여행 중 화면 위쪽. 명소(`가볼만한곳` AT4)·맛집(FD6)·카페(CE7)·문화(`박물관 미술관` CT1) 칸마다 그 시·군·구 주소인 곳만 카카오 정확도순 5곳(6시간 캐시).
+  카카오 키(`KAKAO_REST_API_KEY`)가 없으면 아래 TourAPI 장소 목록에서 칸마다 앞 5곳(`source: "tour"`).
+- **검색(`search`, `page` 1~3)** — 카카오 키워드 검색 15곳씩, 최대 45곳. 그 지역 이름을 붙여 찾고, 그 지역 주소가 하나도 없으면 전국 결과(`outside: true`). 결과마다 카카오맵 장소 페이지 `url`(앱은 `place.map.kakao.com`만 연다).
+  카카오 키가 없으면 TourAPI `searchKeyword2`(아래).
+- 카카오 키 준비: [developers.kakao.com](https://developers.kakao.com) 앱 → 앱 키의 **REST API 키**, 제품 설정 → 카카오맵 **사용 설정 ON**. `supabase/functions/.env`에 `KAKAO_REST_API_KEY=...` 한 줄 → `npx supabase secrets set --env-file supabase/functions/.env`. 하루 10만 번까지 무료.
+- 장소(`places`, 예전 앱 호환): 법정동 시·군·구 목록(`ldongCode2`, 하루 캐시)에서 도시를 찾고, 관광지 40·음식점 30·문화시설 10·레포츠 10·쇼핑 10곳(`areaBasedList2`, 사진 있는 곳 먼저, 숙박 제외, 6시간 캐시).
+- TourAPI 검색: `searchKeyword2`로 그 시·군·구에서, 없으면 도 전체에서 30곳(1시간 캐시). 숙박도 포함.
   앱 지도는 조금 옛 행정구역이라 이름이 다르면 맞춰 준다(인천 남구 → 미추홀구, 군위군은 대구에서 찾기, 합친 시는 구 두 개까지).
 - 장소 종류: 음식점은 이름으로 카페·해산물·맛집, 관광지는 이름(해수욕장·시장·…사·궁…)과 분류 코드로 해변·시장·문화유산·자연·놀거리.
 - 날씨: 그 도시 장소 좌표의 가운데 → 기상청 격자 → 최신 단기예보(30분 캐시). 지금 기온·하늘, 최저·최고, 3시간 간격 셋, 한 줄 팁.
-- 테스트: `deno test -A supabase/functions/life/life_test.ts`
+- 테스트: `deno test -A supabase/functions/life/` (`life_test.ts`, `kakao_test.ts`)
 
 ## 테이블
 

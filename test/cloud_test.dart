@@ -232,8 +232,33 @@ void main() {
         bodies.add(body);
         if (body['action'] == 'search') {
           return _json({
+            'source': 'kakao',
+            'hasMore': true,
+            'outside': false,
             'places': [
-              {'id': 'tour:9', 'name': '${body['query']} 하우스', 'type': 'cafe', 'meta': '카페'},
+              {
+                'id': 'kakao:9',
+                'name': '${body['query']} 하우스',
+                'type': 'cafe',
+                'meta': '카페',
+                'url': 'http://place.map.kakao.com/9',
+              },
+              {'id': 'kakao:10', 'name': '수상한 링크', 'type': 'cafe', 'meta': '카페', 'url': 'https://evil.example/x'},
+            ],
+          });
+        }
+        if (body['action'] == 'popular') {
+          return _json({
+            'source': 'kakao',
+            'sections': [
+              {
+                'key': 'sights',
+                'label': '명소',
+                'places': [
+                  {'id': 'kakao:1', 'name': '경포대', 'type': 'heritage', 'meta': '문화유적'},
+                ],
+              },
+              {'key': 'broken'},
             ],
           });
         }
@@ -282,9 +307,18 @@ void main() {
       expect(w.tip, contains('우산'));
       await life.weather(cityId: '32030', date: now);
 
-      final found = await life.search(cityId: '32030', query: ' 커피 ');
-      expect(found.single.name, '커피 하우스');
-      expect(bodies.removeLast(), {'action': 'search', 'query': '커피', 'provinceCode': '32', 'cityName': '강릉시'});
+      final found = await life.search(cityId: '32030', query: ' 커피 ', page: 2);
+      expect(found.places.first.name, '커피 하우스');
+      expect(found.places.first.url, 'http://place.map.kakao.com/9');
+      expect(found.places.last.url, isNull, reason: '카카오 장소 페이지가 아닌 주소는 열지 않는다');
+      expect(found.hasMore, isTrue);
+      expect(found.source, PlaceSource.kakao);
+      expect(bodies.removeLast(), {'action': 'search', 'query': '커피', 'page': 2, 'provinceCode': '32', 'cityName': '강릉시'});
+
+      final popular = await life.popular(cityId: '32030');
+      expect(popular.sections.single.label, '명소');
+      expect(popular.sections.single.places.single.type, PlaceType.heritage);
+      expect(bodies.removeLast(), {'action': 'popular', 'provinceCode': '32', 'cityName': '강릉시'});
 
       expect(bodies, [
         {'action': 'places', 'provinceCode': '32', 'cityName': '강릉시'},

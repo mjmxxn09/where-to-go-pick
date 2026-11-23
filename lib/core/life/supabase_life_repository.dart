@@ -7,7 +7,7 @@ import 'life_repository.dart';
 /// 앱 지도 id(통계청) → 도 코드와 시·군·구 이름. 지도 데이터에서 찾는다.
 typedef CityLookup = Future<({String provinceCode, String cityName})?> Function(String cityId);
 
-/// 여행지 정보를 Supabase Edge Function `life`에서 받는다(한국관광공사 TourAPI · 기상청 단기예보).
+/// 여행지 정보를 Supabase Edge Function `life`에서 받는다(카카오맵·한국관광공사 TourAPI · 기상청 단기예보).
 ///
 /// - 같은 도시 장소는 앱이 켜져 있는 동안 한 번만, 날씨는 한 시간에 한 번만 묻는다.
 /// - 실패한 요청은 담아 두지 않아서 다시 부르면 다시 묻는다.
@@ -19,7 +19,23 @@ class SupabaseLifeRepository implements LifeRepository {
   final DateTime Function() _clock;
   final _places = <String, Future<List<PlaceSuggestion>>>{};
   final _weather = <String, Future<DayWeather>>{};
-  final _search = <String, Future<List<PlaceSuggestion>>>{};
+  final _search = <String, Future<PlaceSearchResult>>{};
+  final _popular = <String, Future<PopularPlaces>>{};
+
+  @override
+  Future<PopularPlaces> popular({required String cityId}) => _memo(_popular, cityId, () async {
+        final json = await _rest.invoke('life', {'action': 'popular', ...await _city(cityId)});
+        final sections = json['sections'];
+        return PopularPlaces(
+          source: placeSourceFrom(json['source']),
+          sections: [
+            if (sections is List<dynamic>)
+              for (final s in sections)
+                if (s is Map<String, dynamic> && s['key'] is String && s['label'] is String)
+                  PlaceSection(key: s['key'] as String, label: s['label'] as String, places: _placeList(s['places'])),
+          ],
+        );
+      });
 
   @override
   Future<List<PlaceSuggestion>> places({required String cityId, required List<String> interestKeys}) =>
@@ -35,10 +51,18 @@ class SupabaseLifeRepository implements LifeRepository {
       ];
 
   @override
-  Future<List<PlaceSuggestion>> search({required String cityId, required String query}) =>
-      _memo(_search, '$cityId|${query.trim()}', () async {
-        final json = await _rest.invoke('life', {'action': 'search', 'query': query.trim(), ...await _city(cityId)});
-        return _placeList(json['places']);
+  Future<PlaceSearchResult> search({required String cityId, required String query, int page = 1}) =>
+      _memo(_search, '$cityId|${query.trim()}|$page', () async {
+        final json = await _rest.invoke(
+          'life',
+          {'action': 'search', 'query': query.trim(), 'page': page, ...await _city(cityId)},
+        );
+        return PlaceSearchResult(
+          source: placeSourceFrom(json['source']),
+          places: _placeList(json['places']),
+          hasMore: json['hasMore'] == true,
+          outside: json['outside'] == true,
+        );
       });
 
   @override
@@ -82,13 +106,18 @@ PlaceSuggestion? placeSuggestionFromJson(Object? json) {
   final name = json['name'];
   if (id is! String || name is! String || id.isEmpty || name.isEmpty) return null;
   final meta = json['meta'];
+  final url = json['url'];
   return PlaceSuggestion(
     id: id,
     name: name,
     type: PlaceType.values.asNameMap()[json['type']] ?? PlaceType.other,
     meta: meta is String ? meta : '',
+    // 카카오 장소 페이지만 연다(다른 주소는 무시).
+    url: url is String && RegExp(r'^https?://place\.map\.kakao\.com/').hasMatch(url) ? url : null,
   );
 }
+
+PlaceSource placeSourceFrom(Object? v) => v == 'kakao' ? PlaceSource.kakao : PlaceSource.tour;
 
 DayWeather? dayWeatherFromJson(Object? json) {
   if (json is! Map<String, dynamic>) return null;

@@ -33,12 +33,15 @@ class CheckIn {
 
 /// 여행 전·중에 "가볼 곳"으로 담아 둔 장소. 체크인은 여기서 하거나 추천·검색에서 바로 해도 된다.
 class PlannedPlace {
-  const PlannedPlace({required this.id, required this.name, required this.type, this.meta = ''});
+  const PlannedPlace({required this.id, required this.name, required this.type, this.meta = '', this.url});
 
   final String id;
   final String name;
   final PlaceType type;
   final String meta;
+
+  /// 카카오맵 장소 페이지. 없으면 null.
+  final String? url;
 }
 
 class TripDay {

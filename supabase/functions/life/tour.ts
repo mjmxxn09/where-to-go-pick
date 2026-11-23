@@ -28,7 +28,7 @@ export function provinceShort(name: string): string {
 }
 
 /** 앱 지도(조금 옛 행정구역)와 지금 이름이 다른 곳. "도:시군구" → 지금 이름 */
-const CITY_ALIASES: Record<string, string> = { "인천:남구": "미추홀구" };
+export const CITY_ALIASES: Record<string, string> = { "인천:남구": "미추홀구" };
 
 export type Ldong = { regnCd: string; regnNm: string; signguCd: string; signguNm: string };
 

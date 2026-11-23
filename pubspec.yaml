@@ -19,6 +19,8 @@ dependencies:
   # 여행 카드 이미지: 사진 갤러리 저장(Android·iOS), 공유 시트, 웹 다운로드
   gal: ^2.3.0
   share_plus: ^12.0.0
+  # 카카오맵 장소 상세 열기
+  url_launcher: ^6.3.1
   web: ^1.1.0
 
 dev_dependencies:

@@ -38,6 +38,7 @@ class PlaceSuggestion {
     required this.type,
     required this.meta,
     this.visitorRank,
+    this.url,
   });
 
   final String id;
@@ -45,21 +46,67 @@ class PlaceSuggestion {
   final PlaceType type;
   final String meta;
 
+  /// 장소 상세 페이지(카카오맵). 누르면 사진·리뷰·길찾기를 볼 수 있다. 없으면 null.
+  final String? url;
+
   /// 픽클 "다녀온 사람 표" 순위. 표가 아직 없으면 null.
   final VisitorRank? visitorRank;
 
   bool get isFood => type == PlaceType.food || type == PlaceType.market || type == PlaceType.seafood || type == PlaceType.cafe;
 }
 
+/// 인기 장소 한 칸: "명소" 5곳, "맛집" 5곳 …
+class PlaceSection {
+  const PlaceSection({required this.key, required this.label, required this.places});
+
+  final String key;
+  final String label;
+  final List<PlaceSuggestion> places;
+}
+
+/// 장소 정보를 어디서 가져왔는지(화면 아래 출처 표시).
+enum PlaceSource {
+  kakao('카카오맵'),
+  tour('한국관광공사'),
+  sample('예시');
+
+  const PlaceSource(this.label);
+
+  final String label;
+}
+
+class PopularPlaces {
+  const PopularPlaces({required this.sections, required this.source});
+
+  final List<PlaceSection> sections;
+  final PlaceSource source;
+}
+
+class PlaceSearchResult {
+  const PlaceSearchResult({required this.places, required this.source, this.hasMore = false, this.outside = false});
+
+  final List<PlaceSuggestion> places;
+  final PlaceSource source;
+
+  /// 다음 쪽이 있다(카카오는 한 검색어에 3쪽까지).
+  final bool hasMore;
+
+  /// 이 지역에서 못 찾아 전국에서 찾은 결과.
+  final bool outside;
+}
+
 /// 여행지 정보 경계. 공공 API 키는 서버(Supabase Edge Function `life`)에만 두고, 앱은 이 경계만 본다.
 /// - 날씨: 기상청 단기예보(위경도 → 격자 변환·캐시는 서버 책임)
-/// - 명소·맛집: 한국관광공사 TourAPI + 픽클 투표
+/// - 인기 장소·검색: 카카오맵(키가 없으면 한국관광공사 TourAPI) + 픽클 투표
 abstract interface class LifeRepository {
   Future<DayWeather> weather({required String cityId, required DateTime date});
   Future<List<PlaceSuggestion>> places({required String cityId, required List<String> interestKeys});
 
-  /// 이름으로 찾기(그 시·군·구 안, 없으면 도 전체).
-  Future<List<PlaceSuggestion>> search({required String cityId, required String query});
+  /// 지역별·종류별 인기 장소(명소·맛집·카페·문화, 칸마다 5곳 안팎).
+  Future<PopularPlaces> popular({required String cityId});
+
+  /// 이름으로 찾기(그 시·군·구 안, 없으면 더 넓게). [page]는 1부터.
+  Future<PlaceSearchResult> search({required String cityId, required String query, int page = 1});
 }
 
 /// 서버가 생기기 전까지 쓰는 강릉 예시 데이터. 숫자는 모두 예시다.
@@ -106,9 +153,34 @@ class FixtureLifeRepository implements LifeRepository {
       ];
 
   @override
-  Future<List<PlaceSuggestion>> search({required String cityId, required String query}) async {
+  Future<PopularPlaces> popular({required String cityId}) async {
+    final all = await places(cityId: cityId, interestKeys: const []);
+    return PopularPlaces(source: PlaceSource.sample, sections: popularFrom(all));
+  }
+
+  @override
+  Future<PlaceSearchResult> search({required String cityId, required String query, int page = 1}) async {
     final q = query.replaceAll(' ', '');
     final all = await places(cityId: cityId, interestKeys: const []);
-    return [for (final p in all) if (p.name.replaceAll(' ', '').contains(q)) p];
+    return PlaceSearchResult(
+      source: PlaceSource.sample,
+      places: [for (final p in all) if (p.name.replaceAll(' ', '').contains(q)) p],
+    );
   }
+}
+
+/// 장소 목록을 인기 장소 칸(명소·맛집·카페·문화)으로 나눈다. 칸마다 앞에서 [per]곳, 빈 칸은 뺀다.
+List<PlaceSection> popularFrom(List<PlaceSuggestion> places, {int per = 5}) {
+  List<PlaceSuggestion> pick(Set<PlaceType> types) => places.where((p) => types.contains(p.type)).take(per).toList();
+  final sections = [
+    PlaceSection(
+      key: 'sights',
+      label: '명소',
+      places: pick({PlaceType.nature, PlaceType.beach, PlaceType.heritage, PlaceType.leisure, PlaceType.other}),
+    ),
+    PlaceSection(key: 'food', label: '맛집', places: pick({PlaceType.food, PlaceType.seafood, PlaceType.market})),
+    PlaceSection(key: 'cafe', label: '카페', places: pick({PlaceType.cafe})),
+    PlaceSection(key: 'culture', label: '문화', places: pick({PlaceType.culture})),
+  ];
+  return [for (final s in sections) if (s.places.isNotEmpty) s];
 }

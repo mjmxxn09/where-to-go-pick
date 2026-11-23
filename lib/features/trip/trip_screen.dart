@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../app/app_scope.dart';
 import '../../core/life/life_repository.dart';
@@ -9,7 +10,6 @@ import '../../core/votes/vote_repository.dart';
 import '../votes/pickle_ask_bubble.dart';
 import '../shared/weather_icon.dart';
 import '../trip_card/trip_card_screen.dart';
-import 'place_filter.dart';
 import 'check_in_edit_sheet.dart';
 import 'trip_controller.dart';
 import 'trip_dates_sheet.dart';
@@ -24,10 +24,11 @@ class TripScreen extends StatefulWidget {
 }
 
 class _TripScreenState extends State<TripScreen> {
-  PlaceFilter _filter = PlaceFilter.all;
+  /// 인기 장소에서 고른 칸(명소·맛집·카페·문화).
+  String _section = 'sights';
   String? _loadedCity;
   String? _weatherKey;
-  Future<List<PlaceSuggestion>>? _places;
+  Future<PopularPlaces>? _popular;
   Future<DayWeather>? _weather;
 
   /// 날씨를 아직 보여 줄 수 없을 때 한 줄(출발이 3일보다 더 남았을 때).
@@ -43,7 +44,21 @@ class _TripScreenState extends State<TripScreen> {
 
   final _searchCtrl = TextEditingController();
   String _query = '';
-  Future<List<PlaceSuggestion>>? _results;
+
+  /// 검색 결과(쪽을 넘기며 이어 붙인다).
+  List<PlaceSuggestion> _found = const [];
+  int _searchPage = 0;
+  bool _searchHasMore = false;
+  bool _searchOutside = false;
+  bool _searching = false;
+  bool _searchFailed = false;
+  PlaceSource? _searchSource;
+
+  /// 검색할 때마다 늘려, 늦게 온 이전 검색 결과를 버린다.
+  int _searchSeq = 0;
+
+  /// 인기 장소 제목 옆 한 줄.
+  String get _popularNote => '종류별로 많이 찾는 5곳';
 
   @override
   void dispose() {
@@ -54,17 +69,56 @@ class _TripScreenState extends State<TripScreen> {
   void _search(String cityId, String text) {
     final query = text.trim();
     setState(() {
+      _resetSearch();
       _query = query;
-      _results = query.isEmpty ? null : AppScope.of(context).life.search(cityId: cityId, query: query);
     });
+    if (query.isNotEmpty) _searchMore(cityId);
+  }
+
+  void _resetSearch() {
+    _searchSeq++;
+    _query = '';
+    _found = const [];
+    _searchPage = 0;
+    _searchHasMore = false;
+    _searchOutside = false;
+    _searching = false;
+    _searchFailed = false;
+    _searchSource = null;
+  }
+
+  /// 다음 쪽을 받아 이어 붙인다(처음이면 1쪽).
+  Future<void> _searchMore(String cityId) async {
+    final seq = _searchSeq;
+    final query = _query;
+    setState(() {
+      _searching = true;
+      _searchFailed = false;
+    });
+    try {
+      final r = await AppScope.of(context).life.search(cityId: cityId, query: query, page: _searchPage + 1);
+      if (!mounted || seq != _searchSeq) return;
+      final seen = {for (final p in _found) p.id};
+      setState(() {
+        _found = [..._found, ...r.places.where((p) => !seen.contains(p.id))];
+        _searchPage++;
+        _searchHasMore = r.hasMore;
+        _searchOutside = r.outside;
+        _searchSource = r.source;
+        _searching = false;
+      });
+    } on Object {
+      if (!mounted || seq != _searchSeq) return;
+      setState(() {
+        _searching = false;
+        _searchFailed = true;
+      });
+    }
   }
 
   void _clearSearch() {
     _searchCtrl.clear();
-    setState(() {
-      _query = '';
-      _results = null;
-    });
+    setState(_resetSearch);
   }
 
   void _ensureLoaded(Trip trip) {
@@ -85,10 +139,10 @@ class _TripScreenState extends State<TripScreen> {
     }
     if (_loadedCity == trip.cityId) return;
     _loadedCity = trip.cityId;
-    _places = scope.pickle.myInterestKeys().then((keys) => scope.life.places(cityId: trip.cityId, interestKeys: keys));
+    _popular = scope.life.popular(cityId: trip.cityId);
+    _section = 'sights';
     _myVotes = {};
-    _query = '';
-    _results = null;
+    _resetSearch();
     // 빌드 중이라 글자 지우기는 다음 프레임에(입력창이 듣고 있으면 빌드 중 갱신 오류가 난다).
     if (_searchCtrl.text.isNotEmpty) WidgetsBinding.instance.addPostFrameCallback((_) => _searchCtrl.clear());
     scope.votes.myPlaceVotes(trip.cityId).then((v) {
@@ -204,8 +258,9 @@ class _TripScreenState extends State<TripScreen> {
     ));
   }
 
-  Widget _tile(TripController controller, Trip trip, PlaceSuggestion p) => _PlaceTile(
+  Widget _tile(TripController controller, Trip trip, PlaceSuggestion p, {int? rank}) => _PlaceTile(
         place: p,
+        rank: rank,
         done: controller.isCheckedIn(p.id),
         planned: controller.isPlanned(p.id),
         voted: _myVotes.contains(p.id),
@@ -287,18 +342,62 @@ class _TripScreenState extends State<TripScreen> {
         ),
         const SizedBox(height: Gap.xs),
         if (trip.planned.isEmpty)
-          const _LoadProblem(message: '아래 추천이나 검색에서 ☆를 눌러 가볼 곳을 담아 둬요.')
+          const _LoadProblem(message: '아래 인기 장소나 검색에서 ☆를 눌러 가볼 곳을 담아 둬요.')
         else
-          for (final p in trip.planned) _tile(controller, trip, PlaceSuggestion(id: p.id, name: p.name, type: p.type, meta: p.meta)),
+          for (final p in trip.planned)
+            _tile(controller, trip, PlaceSuggestion(id: p.id, name: p.name, type: p.type, meta: p.meta, url: p.url)),
         const SizedBox(height: Gap.m),
-        const _SectionTitle(title: '더 찾아보기'),
+        _SectionTitle(title: '인기 장소', note: _popularNote),
+        const SizedBox(height: Gap.xs),
+        FutureBuilder<PopularPlaces>(
+          future: _popular,
+          builder: (context, snap) {
+            if (snap.connectionState != ConnectionState.done) {
+              return const Padding(padding: EdgeInsets.all(Gap.m), child: LinearProgressIndicator());
+            }
+            if (snap.hasError) {
+              return _LoadProblem(message: '인기 장소를 불러오지 못했어요.', onRetry: () => setState(() => _loadedCity = null));
+            }
+            final popular = snap.data;
+            final sections = popular?.sections ?? const <PlaceSection>[];
+            if (sections.isEmpty) return const _LoadProblem(message: '이 지역 인기 장소를 아직 못 찾았어요. 아래에서 찾아 담아 봐요.');
+            final section = sections.firstWhere((x) => x.key == _section, orElse: () => sections.first);
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      for (final x in sections)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 6),
+                          child: ChoiceChip(
+                            label: Text(x.label),
+                            selected: x.key == section.key,
+                            showCheckmark: false,
+                            onSelected: (_) => setState(() => _section = x.key),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: Gap.s),
+                for (final (i, p) in section.places.indexed) _tile(controller, trip, p, rank: i + 1),
+                _SourceNote(source: popular!.source),
+              ],
+            );
+          },
+        ),
+        const SizedBox(height: Gap.m),
+        const _SectionTitle(title: '찾아서 담기'),
         const SizedBox(height: Gap.xs),
         TextField(
           controller: _searchCtrl,
           textInputAction: TextInputAction.search,
           onSubmitted: (text) => _search(trip.cityId, text),
           decoration: InputDecoration(
-            hintText: '장소 이름으로 찾기 (예: 커피, 해수욕장)',
+            hintText: '가게·장소 이름 (예: 스타벅스 경포, 순두부)',
             prefixIcon: const Icon(Icons.search),
             suffixIcon: _query.isEmpty
                 ? null
@@ -310,67 +409,25 @@ class _TripScreenState extends State<TripScreen> {
           ),
         ),
         const SizedBox(height: Gap.s),
-        if (_query.isNotEmpty)
-          FutureBuilder<List<PlaceSuggestion>>(
-            future: _results,
-            builder: (context, snap) {
-              if (snap.connectionState != ConnectionState.done) {
-                return const Padding(padding: EdgeInsets.all(Gap.m), child: LinearProgressIndicator());
-              }
-              if (snap.hasError) {
-                return _LoadProblem(message: '찾지 못했어요.', onRetry: () => _search(trip.cityId, _query));
-              }
-              final found = snap.data ?? const <PlaceSuggestion>[];
-              if (found.isEmpty) return _LoadProblem(message: "'$_query'(으)로 찾은 곳이 없어요.");
-              return Column(children: [for (final p in found) _tile(controller, trip, p)]);
-            },
-          )
-        else ...[
-          FutureBuilder<List<PlaceSuggestion>>(
-            future: _places,
-            builder: (context, snap) {
-              final all = snap.data ?? const <PlaceSuggestion>[];
-              final filters = PlaceFilter.available(all.map((p) => p.type));
-              final filter = filters.contains(_filter) ? _filter : PlaceFilter.all;
-              final places = all.where((p) => filter.matches(p.type)).toList();
-              if (snap.connectionState != ConnectionState.done) {
-                return const Padding(padding: EdgeInsets.all(Gap.m), child: LinearProgressIndicator());
-              }
-              if (snap.hasError) {
-                return _LoadProblem(
-                  message: '추천 장소를 불러오지 못했어요.',
-                  onRetry: () => setState(() => _loadedCity = null),
-                );
-              }
-              if (all.isEmpty) return const _LoadProblem(message: '이 지역 추천 장소를 아직 못 찾았어요.');
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: [
-                        for (final f in filters)
-                          Padding(
-                            padding: const EdgeInsets.only(right: 6),
-                            child: ChoiceChip(
-                              label: Text(f == PlaceFilter.all
-                                  ? '${f.label} ${all.length}'
-                                  : '${f.label} ${all.where((p) => f.matches(p.type)).length}'),
-                              selected: f == filter,
-                              showCheckmark: false,
-                              onSelected: (_) => setState(() => _filter = f),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: Gap.s),
-                  for (final p in places) _tile(controller, trip, p),
-                ],
-              );
-            },
-          ),
+        if (_query.isNotEmpty) ...[
+          if (_searchOutside)
+            _LoadProblem(message: '${trip.cityName}에서는 못 찾아서 다른 지역 결과를 보여 줘요.'),
+          for (final p in _found) _tile(controller, trip, p),
+          if (_searching)
+            const Padding(padding: EdgeInsets.all(Gap.m), child: LinearProgressIndicator())
+          else if (_searchFailed)
+            _LoadProblem(message: '찾지 못했어요.', onRetry: () => _searchMore(trip.cityId))
+          else if (_found.isEmpty)
+            _LoadProblem(message: "'$_query'(으)로 찾은 곳이 없어요.")
+          else if (_searchHasMore)
+            Center(
+              child: TextButton.icon(
+                onPressed: () => _searchMore(trip.cityId),
+                icon: const Icon(Icons.expand_more),
+                label: const Text('더 보기'),
+              ),
+            ),
+          if (_found.isNotEmpty && _searchSource != null) _SourceNote(source: _searchSource!),
         ],
         const SizedBox(height: Gap.m),
         _Timeline(trip: trip, onTap: (c) => _editCheckIn(controller, trip, c)),
@@ -461,11 +518,14 @@ class _WeatherCard extends StatelessWidget {
 
 /// "가볼 곳 3 · 1곳 다녀옴"
 class _SectionTitle extends StatelessWidget {
-  const _SectionTitle({required this.title, this.count, this.done = 0});
+  const _SectionTitle({required this.title, this.count, this.done = 0, this.note});
 
   final String title;
   final int? count;
   final int done;
+
+  /// 제목 옆 회색 한 줄(예: "종류별로 많이 찾는 5곳").
+  final String? note;
 
   @override
   Widget build(BuildContext context) {
@@ -479,7 +539,36 @@ class _SectionTitle extends StatelessWidget {
           Text(done > 0 ? '$count곳 · $done곳 다녀옴' : '$count곳',
               style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
         ],
+        if (note != null) ...[
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(note!,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+          ),
+        ],
       ],
+    );
+  }
+}
+
+/// 장소 정보 출처 한 줄(카카오맵·한국관광공사).
+class _SourceNote extends StatelessWidget {
+  const _SourceNote({required this.source});
+
+  final PlaceSource source;
+
+  @override
+  Widget build(BuildContext context) {
+    if (source == PlaceSource.sample) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 2),
+      child: Text(
+        source == PlaceSource.kakao ? '장소 정보: 카카오맵 · 이름을 누르면 카카오맵에서 자세히' : '장소 정보: 한국관광공사',
+        textAlign: TextAlign.right,
+        style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+      ),
     );
   }
 }
@@ -532,9 +621,13 @@ class _PlaceTile extends StatelessWidget {
     required this.onCheckIn,
     required this.onTogglePlan,
     required this.onVote,
+    this.rank,
   });
 
   final PlaceSuggestion place;
+
+  /// 인기 장소 순위(1~5). 없으면 숫자 표시 없음.
+  final int? rank;
   final bool done;
   final bool planned;
   final bool voted;
@@ -542,25 +635,69 @@ class _PlaceTile extends StatelessWidget {
   final VoidCallback onTogglePlan;
   final VoidCallback onVote;
 
+  Future<void> _openDetail(BuildContext context) async {
+    final url = place.url;
+    if (url == null) return;
+    final ok = await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+    if (!ok && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('카카오맵을 열지 못했어요.')));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final rank = place.visitorRank;
+    final order = this.rank;
     return Container(
       margin: const EdgeInsets.only(bottom: Gap.s),
-      padding: const EdgeInsets.fromLTRB(14, 10, 10, 10),
+      padding: EdgeInsets.fromLTRB(order == null ? 14 : 10, 10, 10, 10),
       decoration: AppDecorations.card,
       child: Row(
         children: [
+          if (order != null) ...[
+            Container(
+              width: 26,
+              height: 26,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: order == 1 ? AppColors.primary : AppColors.primaryContainer,
+                shape: BoxShape.circle,
+              ),
+              child: Text(
+                '$order',
+                style: TextStyle(
+                  fontFamily: AppFonts.title,
+                  fontSize: 13,
+                  color: order == 1 ? Colors.white : AppColors.primaryDeep,
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+          ],
           Expanded(
-            child: Column(
+            // 카카오 장소면 누르면 카카오맵 상세(사진·리뷰·길찾기).
+            child: InkWell(
+              onTap: place.url == null ? null : () => _openDetail(context),
+              borderRadius: BorderRadius.circular(8),
+              child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(place.name,
                     maxLines: 1, overflow: TextOverflow.ellipsis,
                     style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
-                Text(place.meta,
-                    maxLines: 1, overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(place.meta,
+                          maxLines: 1, overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                    ),
+                    if (place.url != null) ...[
+                      const SizedBox(width: 4),
+                      const Icon(Icons.open_in_new, size: 13, color: AppColors.muted, semanticLabel: '카카오맵에서 보기'),
+                    ],
+                  ],
+                ),
                 // 순위와 "나도 한 표"는 늘 한 줄. 좁으면 순위 글자 끝이 말줄임으로 줄어든다.
                 if (rank != null || done) ...[
                   const SizedBox(height: 3),
@@ -573,6 +710,7 @@ class _PlaceTile extends StatelessWidget {
                   ),
                 ],
               ],
+            ),
             ),
           ),
           IconButton(

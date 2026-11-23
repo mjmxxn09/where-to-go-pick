@@ -239,7 +239,7 @@ class TripController extends ChangeNotifier {
     _replaceCurrent(current.copyWith(
       planned: isPlanned(place.id)
           ? [for (final p in current.planned) if (p.id != place.id) p]
-          : [...current.planned, PlannedPlace(id: place.id, name: place.name, type: place.type, meta: place.meta)],
+          : [...current.planned, PlannedPlace(id: place.id, name: place.name, type: place.type, meta: place.meta, url: place.url)],
     ));
   }
 

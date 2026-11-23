@@ -58,6 +58,19 @@ void main() {
     }
     expect(layout.pinAt(layout.pins[2]! + const Offset(5, 5)), 2);
     expect(layout.pinAt(const Offset(-50, -50)), isNull);
+    // 크게 보기에서 2배 확대·이동한 뒤에도 핀을 누를 수 있다
+    const pan = Offset(-100, -40);
+    expect(layout.pinAt(layout.pins[1]! * 2 + pan, zoom: 2, pan: pan), 1);
+  });
+
+  test('크게 보기 배율·이동은 칸 안으로', () {
+    const size = Size(300, 500);
+    var v = clampView(0.5, const Offset(30, 30), size);
+    expect(v.zoom, 1);
+    expect(v.pan, Offset.zero, reason: '처음 크기에선 움직이지 않는다');
+    v = clampView(20, const Offset(-5000, 10), size);
+    expect(v.zoom, 8);
+    expect(v.pan, const Offset(-2100, 0), reason: '지도 끝이 칸 안쪽으로 들어오지 않게');
   });
 
   test('도 전체 여행: 체크인한 가볼 곳이 든 시·군·구를 내 지도에 칠한다', () {

@@ -353,4 +353,32 @@ void main() {
     expect(cloud.remote, isEmpty);
     expect(store.log.deletedTrips, isEmpty, reason: '서버에서 지웠으면 기록을 비운다');
   });
+
+  test('가볼 곳을 날짜별로: 고른 날로 담고, 날 바꾸고, 기간을 줄이면 밖의 날은 날짜 미정', () async {
+    final store = MemoryTripStore();
+    final controller = TripController(clock: () => DateTime(2026, 11, 20, 10), store: store)
+      ..startTrip(cityId: '32030', cityName: '강릉시', provinceName: '강원특별자치도', plannedDays: 3);
+    controller.togglePlanned(_place, day: 1);
+    const other = PlaceSuggestion(id: 'tour:2', name: '테라로사', type: PlaceType.cafe, meta: '카페');
+    controller.togglePlanned(other, day: 2);
+    expect(controller.trip!.planned.map((p) => p.day), [1, 2]);
+
+    controller.setPlannedDay('gyeongpo', 0);
+    expect(controller.trip!.planned.first.day, 0);
+    controller.setPlannedDay('gyeongpo', null);
+    expect(controller.trip!.planned.first.day, isNull);
+    controller.setPlannedDay('gyeongpo', 1);
+
+    await Future<void>.delayed(Duration.zero);
+    final saved = decodeTripLog(encodeTripLog(store.log)).trips.single;
+    expect(saved.planned.map((p) => p.day), [1, 2], reason: '폰 저장에도 날이 남는다');
+    expect(tripToRow(saved, 'g')['planned'], [
+      {'id': 'gyeongpo', 'name': '경포해변', 'type': 'beach', 'meta': '해변', 'day': 1},
+      {'id': 'tour:2', 'name': '테라로사', 'type': 'cafe', 'meta': '카페', 'day': 2},
+    ]);
+
+    controller.updateDates(startDate: DateTime(2026, 11, 20), plannedDays: 2);
+    expect(controller.trip!.planned.map((p) => p.day), [1, null], reason: '3일차는 없어졌으니 날짜 미정');
+    expect(plannedFromJson({'id': 'a', 'name': 'A', 'day': 99})!.day, isNull, reason: '이상한 값은 버린다');
+  });
 }

@@ -62,6 +62,7 @@ class PlannedPlace {
     this.meta = '',
     this.url,
     this.location,
+    this.day,
   });
 
   final String id;
@@ -74,6 +75,12 @@ class PlannedPlace {
 
   /// 가볼 곳 지도에 찍을 좌표. 없으면 목록에만 나온다.
   final GeoPoint? location;
+
+  /// 가려는 날(0 = 1일차). null이면 날짜 미정.
+  final int? day;
+
+  PlannedPlace withDay(int? day) =>
+      PlannedPlace(id: id, name: name, type: type, meta: meta, url: url, location: location, day: day);
 }
 
 class TripDay {

@@ -64,6 +64,7 @@ Map<String, Object?> plannedToJson(PlannedPlace p) => {
       'meta': p.meta,
       if (p.url != null) 'url': p.url,
       if (p.location case final at?) ...{'lat': at.lat, 'lng': at.lng},
+      if (p.day != null) 'day': p.day,
     };
 
 PlannedPlace? plannedFromJson(Object? json) {
@@ -80,6 +81,7 @@ PlannedPlace? plannedFromJson(Object? json) {
     meta: meta is String ? meta : '',
     url: url is String && url.startsWith('http') ? url : null,
     location: GeoPoint.tryFrom(json['lat'], json['lng']),
+    day: switch (json['day']) { final int d when d >= 0 && d < 30 => d, _ => null },
   );
 }
 

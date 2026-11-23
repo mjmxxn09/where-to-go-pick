@@ -152,7 +152,16 @@ class TripController extends ChangeNotifier {
   void updateDates({required DateTime startDate, int? plannedDays}) {
     final current = _trip;
     if (current == null) return;
-    _replaceCurrent(current.copyWith(startDate: startDate, setPlannedDays: true, plannedDays: plannedDays));
+    // 기간을 줄이면 새 기간 밖 날에 담아 둔 가볼 곳은 날짜 미정으로.
+    _replaceCurrent(current.copyWith(
+      startDate: startDate,
+      setPlannedDays: true,
+      plannedDays: plannedDays,
+      planned: [
+        for (final p in current.planned)
+          plannedDays != null && (p.day ?? 0) >= plannedDays ? p.withDay(null) : p,
+      ],
+    ));
   }
 
   /// 체크인 시각을 바꾼다(깜빡한 체크인을 어제로, 순서 바로잡기). 목록은 다시 시간순으로.
@@ -240,8 +249,8 @@ class TripController extends ChangeNotifier {
 
   bool isPlanned(String placeId) => _trip?.planned.any((p) => p.id == placeId) ?? false;
 
-  /// 가볼 곳에 담거나 뺀다.
-  void togglePlanned(PlaceSuggestion place) {
+  /// 가볼 곳에 담거나 뺀다. [day]는 담을 날(0 = 1일차, null이면 날짜 미정).
+  void togglePlanned(PlaceSuggestion place, {int? day}) {
     final current = _trip;
     if (current == null) return;
     _replaceCurrent(current.copyWith(
@@ -254,8 +263,18 @@ class TripController extends ChangeNotifier {
                 meta: place.meta,
                 url: place.url,
                 location: place.location,
+                day: day,
               )],
     ));
+  }
+
+  /// 가볼 곳의 날을 바꾼다(null = 날짜 미정).
+  void setPlannedDay(String placeId, int? day) {
+    final current = _trip;
+    if (current == null) return;
+    _replaceCurrent(current.copyWith(planned: [
+      for (final p in current.planned) p.id == placeId ? p.withDay(day) : p,
+    ]));
   }
 
   void _replaceCurrent(Trip next) {

@@ -27,6 +27,9 @@ class TripScreen extends StatefulWidget {
 class _TripScreenState extends State<TripScreen> {
   /// 인기 장소에서 고른 칸(명소·맛집·카페·문화).
   String _section = 'sights';
+
+  /// 가볼 곳에서 보고 있는 날(0 = 1일차). null이면 전체. ☆로 담으면 이 날로 들어간다.
+  int? _planDay;
   String? _loadedCity;
   String? _weatherKey;
   Future<PopularPlaces>? _popular;
@@ -142,6 +145,9 @@ class _TripScreenState extends State<TripScreen> {
     _loadedCity = trip.cityId;
     _popular = scope.life.popular(cityId: trip.cityId);
     _section = 'sights';
+    // 여행 중이면 오늘, 출발 전·기간이 지났으면 전체.
+    final today = trip.dayIndexOf(DateTime.now());
+    _planDay = today >= 0 && today < tripDayCount(trip, DateTime.now()) ? today : null;
     _myVotes = {};
     _resetSearch();
     // 빌드 중이라 글자 지우기는 다음 프레임에(입력창이 듣고 있으면 빌드 중 갱신 오류가 난다).
@@ -259,18 +265,123 @@ class _TripScreenState extends State<TripScreen> {
     ));
   }
 
-  Widget _tile(TripController controller, Trip trip, PlaceSuggestion p, {int? rank, bool pinStyle = false}) => _PlaceTile(
+  Widget _tile(
+    TripController controller,
+    Trip trip,
+    PlaceSuggestion p, {
+    int? rank,
+    bool pinStyle = false,
+    PlannedPlace? planned,
+  }) =>
+      _PlaceTile(
         place: p,
         rank: rank,
         pinStyle: pinStyle,
+        dayLabel: planned == null ? null : _dayLabel(trip, planned.day),
+        onDayTap: planned == null ? null : () => _pickDay(controller, trip, planned),
         done: controller.isCheckedIn(p.id),
         planned: controller.isPlanned(p.id),
         voted: _myVotes.contains(p.id),
         // 출발 전에는 체크인을 막는다(가볼 곳 담기는 된다).
         onCheckIn: trip.isBeforeStart(DateTime.now()) ? null : () => _checkIn(controller, p),
-        onTogglePlan: () => controller.togglePlanned(p),
+        onTogglePlan: () => controller.togglePlanned(p, day: _dayInRange(trip, _planDay)),
         onVote: () => _togglePlaceVote(trip.cityId, p.id),
       );
+
+  /// 기간 안의 날만(기간을 줄였거나 기간이 지난 뒤면 전체로).
+  int? _dayInRange(Trip trip, int? day) => day != null && day >= 0 && day < _dayCount(trip) ? day : null;
+
+  int _dayCount(Trip trip) => tripDayCount(trip, DateTime.now());
+
+  String _dayLabel(Trip trip, int? day) {
+    if (day == null || day >= _dayCount(trip)) return '날짜 미정';
+    final d = dateOnly(trip.startDate).add(Duration(days: day));
+    return '${day + 1}일차 ${d.month}/${d.day}';
+  }
+
+  /// 가볼 곳: 고른 날(또는 전체)의 지도와 목록. 번호는 그 목록 순서.
+  List<Widget> _plannedSection(BuildContext context, TripController controller, Trip trip) {
+    final day = _dayInRange(trip, _planDay);
+    final list = [
+      for (final p in trip.planned)
+        if (day == null || p.day == day) p,
+    ];
+    final title = day == null ? '가볼 곳' : '가볼 곳 · ${day + 1}일차';
+    return [
+      _SectionTitle(
+        title: title,
+        count: list.length,
+        done: list.where((p) => controller.isCheckedIn(p.id)).length,
+      ),
+      const SizedBox(height: Gap.xs),
+      if (list.isEmpty)
+        _LoadProblem(
+          message: day == null
+              ? '아래 인기 장소나 검색에서 ☆를 눌러 가볼 곳을 담아 둬요.'
+              : '${day + 1}일차에 갈 곳을 아래 인기 장소나 검색에서 ☆로 담아 봐요. 위 날짜 칸을 누르면 그날로 바뀌어요.',
+        )
+      else ...[
+        // 담은 곳을 지도에 번호 핀으로(번호 = 아래 목록 순서). 날을 고르면 그날 순서대로 선으로 잇는다.
+        if (list.any((p) => p.location != null)) ...[
+          PlannedMap(
+            mapData: AppScope.of(context).mapData,
+            cityId: trip.cityId,
+            title: '${regionShortName(trip.cityName)} · ${day == null ? '가볼 곳 전체' : '${day + 1}일차 가볼 곳'}',
+            connect: day != null,
+            pins: [
+              for (final (i, p) in list.indexed)
+                if (p.location case final at?)
+                  PlannedPin(number: i + 1, name: p.name, at: at, done: controller.isCheckedIn(p.id)),
+            ],
+            missing: list.where((p) => p.location == null).length,
+          ),
+          const SizedBox(height: Gap.s),
+        ],
+        for (final (i, p) in list.indexed)
+          _tile(
+            controller,
+            trip,
+            PlaceSuggestion(id: p.id, name: p.name, type: p.type, meta: p.meta, url: p.url, location: p.location),
+            rank: i + 1,
+            pinStyle: true,
+            planned: p,
+          ),
+      ],
+    ];
+  }
+
+  /// 가볼 곳의 날 바꾸기(1일차 … n일차, 날짜 미정).
+  Future<void> _pickDay(TripController controller, Trip trip, PlannedPlace place) async {
+    final count = _dayCount(trip);
+    final picked = await showModalBottomSheet<int>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+              child: Text('${place.name} · 언제 갈까요?', style: titleStyle(18)),
+            ),
+            for (var i = 0; i < count; i++)
+              ListTile(
+                title: Text(_dayLabel(trip, i)),
+                trailing: place.day == i ? const Icon(Icons.check, color: AppColors.primary) : null,
+                onTap: () => Navigator.of(context).pop(i),
+              ),
+            ListTile(
+              title: const Text('날짜 미정'),
+              trailing: place.day == null ? const Icon(Icons.check, color: AppColors.primary) : null,
+              onTap: () => Navigator.of(context).pop(-1),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (picked == null || !mounted) return;
+    controller.setPlannedDay(place.id, picked < 0 ? null : picked);
+  }
 
   Future<void> _editDates(TripController controller, Trip trip) async {
     final dates = await showTripDatesSheet(
@@ -324,7 +435,12 @@ class _TripScreenState extends State<TripScreen> {
           style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
         ),
         const SizedBox(height: Gap.s),
-        _DayStrip(trip: trip, now: now),
+        _DayStrip(
+          trip: trip,
+          now: now,
+          selected: _dayInRange(trip, _planDay),
+          onSelect: (day) => setState(() => _planDay = day),
+        ),
         if (beforeStart) ...[
           const SizedBox(height: Gap.s),
           _Notice(
@@ -335,38 +451,7 @@ class _TripScreenState extends State<TripScreen> {
         const SizedBox(height: Gap.s + 4),
         _WeatherCard(future: _weather, note: _weatherNote),
         const SizedBox(height: Gap.s + 4),
-        _SectionTitle(
-          title: '가볼 곳',
-          count: trip.planned.length,
-          done: trip.planned.where((p) => controller.isCheckedIn(p.id)).length,
-        ),
-        const SizedBox(height: Gap.xs),
-        if (trip.planned.isEmpty)
-          const _LoadProblem(message: '아래 인기 장소나 검색에서 ☆를 눌러 가볼 곳을 담아 둬요.')
-        else ...[
-          // 담은 곳을 이 시·군·구 지도에 번호 핀으로(번호 = 아래 목록 순서).
-          if (trip.planned.any((p) => p.location != null)) ...[
-            PlannedMap(
-              mapData: AppScope.of(context).mapData,
-              cityId: trip.cityId,
-              pins: [
-                for (final (i, p) in trip.planned.indexed)
-                  if (p.location case final at?)
-                    PlannedPin(number: i + 1, name: p.name, at: at, done: controller.isCheckedIn(p.id)),
-              ],
-              missing: trip.planned.where((p) => p.location == null).length,
-            ),
-            const SizedBox(height: Gap.s),
-          ],
-          for (final (i, p) in trip.planned.indexed)
-            _tile(
-              controller,
-              trip,
-              PlaceSuggestion(id: p.id, name: p.name, type: p.type, meta: p.meta, url: p.url, location: p.location),
-              rank: i + 1,
-              pinStyle: true,
-            ),
-        ],
+        ..._plannedSection(context, controller, trip),
         const SizedBox(height: Gap.m),
         _SectionTitle(title: '인기 장소', note: _popularNote),
         const SizedBox(height: Gap.xs),
@@ -633,6 +718,8 @@ class _PlaceTile extends StatelessWidget {
     required this.onVote,
     this.rank,
     this.pinStyle = false,
+    this.dayLabel,
+    this.onDayTap,
   });
 
   final PlaceSuggestion place;
@@ -642,6 +729,10 @@ class _PlaceTile extends StatelessWidget {
 
   /// 가볼 곳 지도 핀과 같은 색 번호(보라, 다녀오면 청록).
   final bool pinStyle;
+
+  /// 가볼 곳의 날("2일차 11/24", "날짜 미정"). 누르면 [onDayTap]으로 날 바꾸기.
+  final String? dayLabel;
+  final VoidCallback? onDayTap;
   final bool done;
   final bool planned;
   final bool voted;
@@ -715,10 +806,14 @@ class _PlaceTile extends StatelessWidget {
                   ],
                 ),
                 // 순위와 "나도 한 표"는 늘 한 줄. 좁으면 순위 글자 끝이 말줄임으로 줄어든다.
-                if (rank != null || done) ...[
+                if (rank != null || done || dayLabel != null) ...[
                   const SizedBox(height: 3),
                   Row(
                     children: [
+                      if (dayLabel != null) ...[
+                        _DayTag(label: dayLabel!, onTap: onDayTap),
+                        const SizedBox(width: 4),
+                      ],
                       if (rank != null) Flexible(child: _RankLine(rank: rank)),
                       if (rank != null && done) const SizedBox(width: 4),
                       if (done) _VoteChip(voted: voted, onTap: onVote),
@@ -849,41 +944,134 @@ class _Timeline extends StatelessWidget {
 }
 
 /// 여행 날짜 줄: "1일차 11/20 · 체크인 3", 오늘은 진하게. 기간을 정하지 않았으면 오늘까지.
+/// 가볼 곳의 날 표시. 누르면 다른 날로 옮긴다.
+class _DayTag extends StatelessWidget {
+  const _DayTag({required this.label, this.onTap});
+
+  final String label;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final unset = label == '날짜 미정';
+    return Semantics(
+      button: onTap != null,
+      label: '$label, 날 바꾸기',
+      excludeSemantics: true,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+          decoration: BoxDecoration(
+            color: unset ? AppColors.surfaceAlt : AppColors.primaryContainer,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(label,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: unset ? AppColors.textSecondary : AppColors.primaryDeep,
+                  )),
+              const Icon(Icons.arrow_drop_down, size: 14, color: AppColors.muted),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 날짜 칸 수: 기간을 정했으면 그 기간(체크인이 더 길면 그만큼), 안 정했으면 오늘까지. 1~30.
+int tripDayCount(Trip trip, DateTime now) {
+  final today = trip.dayIndexOf(now);
+  return math.max(1, math.min(30, trip.plannedDays == null ? math.max(trip.totalDays, today + 1) : trip.totalDays));
+}
+
+/// 날짜 칸: 전체 · 1일차 · 2일차 …. 누르면 가볼 곳이 그날 것만 보이고, ☆로 담으면 그날로 들어간다.
+/// 칸 안 숫자는 그날 가볼 곳 수, 오늘 칸에는 점.
 class _DayStrip extends StatelessWidget {
-  const _DayStrip({required this.trip, required this.now});
+  const _DayStrip({required this.trip, required this.now, required this.selected, required this.onSelect});
 
   final Trip trip;
   final DateTime now;
 
+  /// 고른 날(null = 전체).
+  final int? selected;
+  final ValueChanged<int?> onSelect;
+
   @override
   Widget build(BuildContext context) {
     final today = trip.dayIndexOf(now);
-    // 기간을 정했으면 그 기간(체크인이 더 길면 그만큼), 안 정했으면 오늘까지.
-    final count = math.min(30, trip.plannedDays == null ? math.max(trip.totalDays, today + 1) : trip.totalDays);
-    final byDay = {for (final d in trip.days) d.index: d.checkIns.length};
+    final count = tripDayCount(trip, now);
+    final planned = <int, int>{};
+    for (final p in trip.planned) {
+      if (p.day != null) planned[p.day!] = (planned[p.day!] ?? 0) + 1;
+    }
     final start = dateOnly(trip.startDate);
+    Widget chip({required String label, required bool on, required VoidCallback onTap, bool dot = false, String? semantics}) =>
+        Padding(
+          padding: const EdgeInsets.only(right: 6),
+          child: Semantics(
+            button: true,
+            selected: on,
+            label: semantics,
+            child: Material(
+              color: on ? AppColors.primary : AppColors.surface,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+                side: BorderSide(color: on ? AppColors.primary : AppColors.primaryContainer),
+              ),
+              child: InkWell(
+                onTap: onTap,
+                borderRadius: BorderRadius.circular(14),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (dot) ...[
+                        Container(
+                          width: 6,
+                          height: 6,
+                          decoration: BoxDecoration(
+                            color: on ? Colors.white : AppColors.secondary,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 5),
+                      ],
+                      Text(
+                        label,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: on ? Colors.white : AppColors.primaryDeep,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: Row(
         children: [
+          chip(label: '전체 ${trip.planned.length}', on: selected == null, onTap: () => onSelect(null), semantics: '가볼 곳 전체'),
           for (var i = 0; i < count; i++)
-            Container(
-              margin: const EdgeInsets.only(right: 6),
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                color: i == today ? AppColors.primary : AppColors.surface,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: i == today ? AppColors.primary : AppColors.primaryContainer),
-              ),
-              child: Text(
-                '${i + 1}일차 ${start.add(Duration(days: i)).month}/${start.add(Duration(days: i)).day}'
-                '${(byDay[i] ?? 0) > 0 ? ' · ${byDay[i]}곳' : ''}',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: i == today ? Colors.white : AppColors.primaryDeep,
-                ),
-              ),
+            chip(
+              label: '${i + 1}일차 ${start.add(Duration(days: i)).month}/${start.add(Duration(days: i)).day}'
+                  '${(planned[i] ?? 0) > 0 ? ' · ${planned[i]}' : ''}',
+              on: selected == i,
+              dot: i == today,
+              onTap: () => onSelect(i),
+              semantics: '${i + 1}일차${i == today ? ', 오늘' : ''}, 가볼 곳 ${planned[i] ?? 0}곳',
             ),
         ],
       ),

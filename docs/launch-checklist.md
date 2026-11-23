@@ -36,5 +36,5 @@
 - [x] 여행 카드 이미지 저장·공유(갤러리 `gal`, 공유 `share_plus`)
 - [ ] iOS `Info.plist` 사진 추가 문구(`NSPhotoLibraryAddUsageDescription`, `NSPhotoLibraryUsageDescription`)
 - [ ] `android/`·`ios/` 폴더를 저장소에 올릴지 결정(지금은 PC에만 있음 — 매니페스트 수정 내용은 trip-card.md)
-- [ ] 스토어 위치 권한 설명 문구(체크인·걸은 길 기록 때만 사용)
+- [ ] 체크인에 위치 확인을 붙이면 스토어 위치 권한 설명 문구(지금은 위치를 쓰지 않음, 걸은 길 기록은 2026-11-23 뺌)
 - [ ] 접근성: 지도는 시·군·구 목록으로도 고를 수 있게

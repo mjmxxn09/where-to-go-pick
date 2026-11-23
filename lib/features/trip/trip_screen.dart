@@ -11,11 +11,12 @@ import '../votes/pickle_ask_bubble.dart';
 import '../shared/weather_icon.dart';
 import '../trip_card/trip_card_screen.dart';
 import 'check_in_edit_sheet.dart';
+import 'planned_map.dart';
 import 'trip_controller.dart';
 import 'trip_dates_sheet.dart';
 import 'trip_models.dart';
 
-/// 3 · 여행 중: 그날 날씨, 가볼 곳(☆로 담은 곳), 명소·맛집 추천과 이름 검색, 버튼 한 번 체크인, 시간순 기록.
+/// 3 · 여행 중: 그날 날씨, 가볼 곳(☆로 담은 곳, 위에 번호 핀 지도), 칸별 인기 5곳과 카카오맵 검색, 버튼 한 번 체크인, 시간순 기록.
 class TripScreen extends StatefulWidget {
   const TripScreen({super.key});
 
@@ -258,9 +259,10 @@ class _TripScreenState extends State<TripScreen> {
     ));
   }
 
-  Widget _tile(TripController controller, Trip trip, PlaceSuggestion p, {int? rank}) => _PlaceTile(
+  Widget _tile(TripController controller, Trip trip, PlaceSuggestion p, {int? rank, bool pinStyle = false}) => _PlaceTile(
         place: p,
         rank: rank,
+        pinStyle: pinStyle,
         done: controller.isCheckedIn(p.id),
         planned: controller.isPlanned(p.id),
         voted: _myVotes.contains(p.id),
@@ -333,8 +335,6 @@ class _TripScreenState extends State<TripScreen> {
         const SizedBox(height: Gap.s + 4),
         _WeatherCard(future: _weather, note: _weatherNote),
         const SizedBox(height: Gap.s + 4),
-        _RouteToggle(controller: controller),
-        const SizedBox(height: Gap.s + 4),
         _SectionTitle(
           title: '가볼 곳',
           count: trip.planned.length,
@@ -343,9 +343,30 @@ class _TripScreenState extends State<TripScreen> {
         const SizedBox(height: Gap.xs),
         if (trip.planned.isEmpty)
           const _LoadProblem(message: '아래 인기 장소나 검색에서 ☆를 눌러 가볼 곳을 담아 둬요.')
-        else
-          for (final p in trip.planned)
-            _tile(controller, trip, PlaceSuggestion(id: p.id, name: p.name, type: p.type, meta: p.meta, url: p.url)),
+        else ...[
+          // 담은 곳을 이 시·군·구 지도에 번호 핀으로(번호 = 아래 목록 순서).
+          if (trip.planned.any((p) => p.location != null)) ...[
+            PlannedMap(
+              mapData: AppScope.of(context).mapData,
+              cityId: trip.cityId,
+              pins: [
+                for (final (i, p) in trip.planned.indexed)
+                  if (p.location case final at?)
+                    PlannedPin(number: i + 1, name: p.name, at: at, done: controller.isCheckedIn(p.id)),
+              ],
+              missing: trip.planned.where((p) => p.location == null).length,
+            ),
+            const SizedBox(height: Gap.s),
+          ],
+          for (final (i, p) in trip.planned.indexed)
+            _tile(
+              controller,
+              trip,
+              PlaceSuggestion(id: p.id, name: p.name, type: p.type, meta: p.meta, url: p.url, location: p.location),
+              rank: i + 1,
+              pinStyle: true,
+            ),
+        ],
         const SizedBox(height: Gap.m),
         _SectionTitle(title: '인기 장소', note: _popularNote),
         const SizedBox(height: Gap.xs),
@@ -594,24 +615,6 @@ class _LoadProblem extends StatelessWidget {
   }
 }
 
-class _RouteToggle extends StatelessWidget {
-  const _RouteToggle({required this.controller});
-
-  final TripController controller;
-
-  @override
-  Widget build(BuildContext context) {
-    return SwitchListTile(
-      value: controller.recordingRoute,
-      onChanged: (_) => controller.toggleRouteRecording(),
-      title: const Text('걸은 길 기록'),
-      subtitle: const Text('켤 때만 위치를 기록해요. 끄면 바로 멈춰요.'),
-      tileColor: AppColors.surface,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-    );
-  }
-}
-
 class _PlaceTile extends StatelessWidget {
   const _PlaceTile({
     required this.place,
@@ -622,12 +625,16 @@ class _PlaceTile extends StatelessWidget {
     required this.onTogglePlan,
     required this.onVote,
     this.rank,
+    this.pinStyle = false,
   });
 
   final PlaceSuggestion place;
 
-  /// 인기 장소 순위(1~5). 없으면 숫자 표시 없음.
+  /// 인기 장소 순위(1~5) 또는 가볼 곳 번호. 없으면 숫자 표시 없음.
   final int? rank;
+
+  /// 가볼 곳 지도 핀과 같은 색 번호(보라, 다녀오면 청록).
+  final bool pinStyle;
   final bool done;
   final bool planned;
   final bool voted;
@@ -660,7 +667,9 @@ class _PlaceTile extends StatelessWidget {
               height: 26,
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: order == 1 ? AppColors.primary : AppColors.primaryContainer,
+                color: pinStyle
+                    ? (done ? AppColors.accent : AppColors.primary)
+                    : (order == 1 ? AppColors.primary : AppColors.primaryContainer),
                 shape: BoxShape.circle,
               ),
               child: Text(
@@ -668,7 +677,7 @@ class _PlaceTile extends StatelessWidget {
                 style: TextStyle(
                   fontFamily: AppFonts.title,
                   fontSize: 13,
-                  color: order == 1 ? Colors.white : AppColors.primaryDeep,
+                  color: pinStyle || order == 1 ? Colors.white : AppColors.primaryDeep,
                 ),
               ),
             ),

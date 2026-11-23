@@ -161,7 +161,14 @@ void main() {
     final controller = TripController(clock: () => DateTime(2026, 11, 20), store: store)
       ..startTrip(cityId: '32030', cityName: '강릉시', provinceName: '강원특별자치도');
     controller.togglePlanned(_place);
-    const other = PlaceSuggestion(id: 'tour:2', name: '테라로사', type: PlaceType.cafe, meta: '카페');
+    const other = PlaceSuggestion(
+      id: 'tour:2',
+      name: '테라로사',
+      type: PlaceType.cafe,
+      meta: '카페',
+      url: 'http://place.map.kakao.com/2',
+      location: GeoPoint(37.7175, 128.877),
+    );
     controller.togglePlanned(other);
     expect(controller.trip!.planned.map((p) => p.id), ['gyeongpo', 'tour:2']);
     expect(controller.isPlanned('tour:2'), isTrue);
@@ -172,12 +179,24 @@ void main() {
     final saved = decodeTripLog(encodeTripLog(store.log)).trips.single;
     expect(saved.planned.single.type, PlaceType.cafe);
     expect(saved.planned.single.meta, '카페');
+    expect(saved.planned.single.location, const GeoPoint(37.7175, 128.877), reason: '가볼 곳 지도용 좌표도 저장');
 
     final row = tripToRow(saved, 'g');
     expect(row['planned'], [
-      {'id': 'tour:2', 'name': '테라로사', 'type': 'cafe', 'meta': '카페'},
+      {
+        'id': 'tour:2',
+        'name': '테라로사',
+        'type': 'cafe',
+        'meta': '카페',
+        'url': 'http://place.map.kakao.com/2',
+        'lat': 37.7175,
+        'lng': 128.877,
+      },
     ]);
-    expect(tripFromRow({...row, 'check_ins': <Object>[]})!.planned.single.id, 'tour:2');
+    final back = tripFromRow({...row, 'check_ins': <Object>[]})!.planned.single;
+    expect(back.id, 'tour:2');
+    expect(back.location, const GeoPoint(37.7175, 128.877));
+    expect(plannedFromJson({'id': 'a', 'name': 'A', 'lat': 0, 'lng': 0})!.location, isNull, reason: '빈 좌표는 버린다');
   });
 
   test('합칠 때 가볼 곳은 기기 쪽 목록을 그대로 쓴다', () {

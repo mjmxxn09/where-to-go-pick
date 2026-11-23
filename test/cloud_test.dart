@@ -255,7 +255,7 @@ void main() {
                 'key': 'sights',
                 'label': '명소',
                 'places': [
-                  {'id': 'kakao:1', 'name': '경포대', 'type': 'heritage', 'meta': '문화유적'},
+                  {'id': 'kakao:1', 'name': '경포대', 'type': 'heritage', 'meta': '문화유적', 'lat': 37.7955, 'lng': 128.8964},
                 ],
               },
               {'key': 'broken'},
@@ -318,6 +318,7 @@ void main() {
       final popular = await life.popular(cityId: '32030');
       expect(popular.sections.single.label, '명소');
       expect(popular.sections.single.places.single.type, PlaceType.heritage);
+      expect(popular.sections.single.places.single.location, const GeoPoint(37.7955, 128.8964));
       expect(bodies.removeLast(), {'action': 'popular', 'provinceCode': '32', 'cityName': '강릉시'});
 
       expect(bodies, [

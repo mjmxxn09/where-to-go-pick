@@ -63,6 +63,7 @@ Map<String, Object?> plannedToJson(PlannedPlace p) => {
       'type': p.type.name,
       'meta': p.meta,
       if (p.url != null) 'url': p.url,
+      if (p.location case final at?) ...{'lat': at.lat, 'lng': at.lng},
     };
 
 PlannedPlace? plannedFromJson(Object? json) {
@@ -78,6 +79,7 @@ PlannedPlace? plannedFromJson(Object? json) {
     type: placeTypeFromName(json['type']),
     meta: meta is String ? meta : '',
     url: url is String && url.startsWith('http') ? url : null,
+    location: GeoPoint.tryFrom(json['lat'], json['lng']),
   );
 }
 

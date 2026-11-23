@@ -10,6 +10,15 @@ Trip sampleGangneungTrip() {
     provinceName: '강원특별자치도',
     startDate: DateTime(2026, 11, 13),
     plannedDays: 3,
+    // 가볼 곳 지도 예시(좌표는 대략).
+    planned: const [
+      PlannedPlace(id: 'gyeongpo', name: '경포해변', type: PlaceType.beach, meta: '해변 · 자연', location: GeoPoint(37.8055, 128.9087)),
+      PlannedPlace(id: 'ojukheon', name: '오죽헌', type: PlaceType.heritage, meta: '역사', location: GeoPoint(37.7792, 128.8786)),
+      PlannedPlace(id: 'chodang', name: '초당순두부마을', type: PlaceType.food, meta: '맛집', location: GeoPoint(37.7914, 128.9149)),
+      PlannedPlace(id: 'jeongdongjin', name: '정동진', type: PlaceType.beach, meta: '해변', location: GeoPoint(37.6905, 129.0343)),
+      PlannedPlace(id: 'jumunjin', name: '주문진 수산시장', type: PlaceType.seafood, meta: '시장 · 해산물', location: GeoPoint(37.8930, 128.8263)),
+      PlannedPlace(id: 'terarosa', name: '테라로사 커피공장', type: PlaceType.cafe, meta: '카페', location: GeoPoint(37.7175, 128.8770)),
+    ],
     checkIns: [
       CheckIn(id: 'gyeongpo', placeName: '경포해변', type: PlaceType.beach, at: t(0, 10, 20)),
       CheckIn(id: 'anmok', placeName: '안목 커피거리', type: PlaceType.cafe, at: t(0, 13, 40)),

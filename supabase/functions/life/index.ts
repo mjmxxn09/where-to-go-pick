@@ -9,6 +9,7 @@
 // 비밀값: DATA_GO_KR_SERVICE_KEY (공공데이터포털 일반 인증키, Decoding 값), KAKAO_REST_API_KEY (카카오 REST API 키)
 
 import { isAppUser } from "./auth.ts";
+import { brief } from "./brief.ts";
 import { UpstreamError } from "./datago.ts";
 import { kst, loadForecast, summarize, toGrid } from "./kma.ts";
 import { hasKakao, popularSections, searchKakao } from "./kakao.ts";
@@ -31,9 +32,6 @@ async function codesFor(provinceCode: string, cityName: string): Promise<Ldong[]
   if (!codes.length) throw new UpstreamError("CITY_NOT_FOUND", `${cityName}의 지역 코드를 찾지 못했어요.`);
   return codes;
 }
-
-const brief = (places: (Place & { url?: string })[]) =>
-  places.map(({ id, name, type, meta, url }) => (url ? { id, name, type, meta, url } : { id, name, type, meta }));
 
 /** 카카오 키가 없을 때: 한국관광공사 목록을 같은 칸으로 나눠 앞에서 5곳씩(사진 있는 곳이 앞). */
 function sectionsFromTour(places: Place[], per = 5) {

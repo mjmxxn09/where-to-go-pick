@@ -41,6 +41,7 @@
 - **인기 장소(`popular`)** — 여행 중 화면 위쪽. 명소(`가볼만한곳` AT4)·맛집(FD6)·카페(CE7)·문화(`박물관 미술관` CT1) 칸마다 그 시·군·구 주소인 곳만 카카오 정확도순 5곳(6시간 캐시).
   카카오 키(`KAKAO_REST_API_KEY`)가 없으면 아래 TourAPI 장소 목록에서 칸마다 앞 5곳(`source: "tour"`).
 - **검색(`search`, `page` 1~3)** — 카카오 키워드 검색 15곳씩, 최대 45곳. 그 지역 이름을 붙여 찾고, 그 지역 주소가 하나도 없으면 전국 결과(`outside: true`). 결과마다 카카오맵 장소 페이지 `url`(앱은 `place.map.kakao.com`만 연다).
+- 장소마다 `lat`·`lng`(한국 안 좌표만, 소수 6자리) — 앱의 가볼 곳 지도용.
   카카오 키가 없으면 TourAPI `searchKeyword2`(아래).
 - 카카오 키 준비: [developers.kakao.com](https://developers.kakao.com) 앱 → 앱 키의 **REST API 키**, 제품 설정 → 카카오맵 **사용 설정 ON**. `supabase/functions/.env`에 `KAKAO_REST_API_KEY=...` 한 줄 → `npx supabase secrets set --env-file supabase/functions/.env`. 하루 10만 번까지 무료.
 - 장소(`places`, 예전 앱 호환): 법정동 시·군·구 목록(`ldongCode2`, 하루 캐시)에서 도시를 찾고, 관광지 40·음식점 30·문화시설 10·레포츠 10·쇼핑 10곳(`areaBasedList2`, 사진 있는 곳 먼저, 숙박 제외, 6시간 캐시).
@@ -59,7 +60,7 @@
 | `card_decorations` | user_id, page_key | 스티커 JSON, 옮긴 장소 막대 JSON |
 
 `user_id`는 토큰의 sub 문자열이다(`auth.uid()`는 uuid 전용이라 쓰지 않는다). anon(로그인 안 한 요청)에는 권한이 없다.
-위치는 장소 이름과 시각만 저장한다. 걸은 길(GPS 좌표)은 아직 올리지 않는다 — 올리기 전에 출시 체크리스트의 위치정보 항목부터.
+체크인은 장소 이름과 시각만 저장한다. 폰 위치(GPS)는 쓰지도 올리지도 않는다. 가볼 곳(`planned`)에는 장소 자체의 좌표(카카오·관광공사 공개 좌표)가 들어간다.
 
 ## 처음 설정 (한 번만)
 

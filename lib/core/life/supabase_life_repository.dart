@@ -114,6 +114,7 @@ PlaceSuggestion? placeSuggestionFromJson(Object? json) {
     meta: meta is String ? meta : '',
     // 카카오 장소 페이지만 연다(다른 주소는 무시).
     url: url is String && RegExp(r'^https?://place\.map\.kakao\.com/').hasMatch(url) ? url : null,
+    location: GeoPoint.tryFrom(json['lat'], json['lng']),
   );
 }
 

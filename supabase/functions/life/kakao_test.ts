@@ -1,5 +1,6 @@
 // deno test -A supabase/functions/life/kakao_test.ts
 import { deepStrictEqual as assertEquals, ok as assert } from "node:assert";
+import { brief } from "./brief.ts";
 import { inRegion, kakaoMeta, kakaoType, popularSections, regionWord, searchKakao, toKakaoPlace } from "./kakao.ts";
 
 const doc = (o: Record<string, string>) => ({
@@ -86,4 +87,15 @@ Deno.test("검색: 지역 안에 없으면 전국에서 찾고 outside 표시", 
   } finally {
     s.restore();
   }
+});
+
+Deno.test("앱에 보내는 장소: 한국 안 좌표만 소수 6자리로, 주소는 있을 때만", () => {
+  const out = brief([
+    { id: "kakao:1", name: "경포대", type: "heritage", meta: "", lat: 37.79512345678, lng: 128.89612345678, url: "http://place.map.kakao.com/1" },
+    { id: "tour:2", name: "좌표 없음", type: "food", meta: "", lat: null, lng: null },
+    { id: "tour:3", name: "바다 한가운데", type: "food", meta: "", lat: 0, lng: 0 },
+  ]);
+  assertEquals(out[0], { id: "kakao:1", name: "경포대", type: "heritage", meta: "", url: "http://place.map.kakao.com/1", lat: 37.795123, lng: 128.896123 });
+  assertEquals(out[1], { id: "tour:2", name: "좌표 없음", type: "food", meta: "" });
+  assertEquals(out[2], { id: "tour:3", name: "바다 한가운데", type: "food", meta: "" });
 });

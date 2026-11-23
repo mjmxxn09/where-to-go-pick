@@ -24,7 +24,6 @@ class TripController extends ChangeNotifier {
   final DateTime Function() _clock;
   final TripStore? _store;
   final TripCloud? _cloud;
-  bool _recordingRoute = false;
   bool _needsPush = false;
 
   /// 지웠지만 아직 서버에서 지우지 못한 것(폰에도 저장). 서버 기록과 합칠 때 되살아나지 않게 한다.
@@ -34,7 +33,6 @@ class TripController extends ChangeNotifier {
   bool _disposed = false;
 
   Trip? get trip => _trip;
-  bool get recordingRoute => _recordingRoute;
 
   /// 저장된 모든 여행(진행 중 포함, 예시 여행 제외), 시작일 최신순.
   List<Trip> get trips => _trips;
@@ -239,7 +237,14 @@ class TripController extends ChangeNotifier {
     _replaceCurrent(current.copyWith(
       planned: isPlanned(place.id)
           ? [for (final p in current.planned) if (p.id != place.id) p]
-          : [...current.planned, PlannedPlace(id: place.id, name: place.name, type: place.type, meta: place.meta, url: place.url)],
+          : [...current.planned, PlannedPlace(
+                id: place.id,
+                name: place.name,
+                type: place.type,
+                meta: place.meta,
+                url: place.url,
+                location: place.location,
+              )],
     ));
   }
 
@@ -248,12 +253,6 @@ class TripController extends ChangeNotifier {
     if (!isSampleTrip(next)) _trips = [for (final t in _trips) t.id == next.id ? next : t];
     notifyListeners();
     _changed(next);
-  }
-
-  /// 경로 기록은 사용자가 켤 때만 동작한다(백그라운드 상시 추적 없음).
-  void toggleRouteRecording() {
-    _recordingRoute = !_recordingRoute;
-    notifyListeners();
   }
 
   @override

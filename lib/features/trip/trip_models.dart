@@ -31,9 +31,38 @@ class CheckIn {
   final DateTime at;
 }
 
+/// 장소 좌표(위도·경도). 폰 위치가 아니라 장소 자체의 공개 좌표(카카오·관광공사).
+class GeoPoint {
+  const GeoPoint(this.lat, this.lng);
+
+  final double lat;
+  final double lng;
+
+  /// 한국 언저리 좌표만 받는다(0,0 같은 빈 값·뒤바뀐 값은 null).
+  static GeoPoint? tryFrom(Object? lat, Object? lng) {
+    if (lat is! num || lng is! num) return null;
+    final a = lat.toDouble(), b = lng.toDouble();
+    if (a <= 32 || a >= 39.5 || b <= 124 || b >= 132.5) return null;
+    return GeoPoint(a, b);
+  }
+
+  @override
+  bool operator ==(Object other) => other is GeoPoint && other.lat == lat && other.lng == lng;
+
+  @override
+  int get hashCode => Object.hash(lat, lng);
+}
+
 /// 여행 전·중에 "가볼 곳"으로 담아 둔 장소. 체크인은 여기서 하거나 추천·검색에서 바로 해도 된다.
 class PlannedPlace {
-  const PlannedPlace({required this.id, required this.name, required this.type, this.meta = '', this.url});
+  const PlannedPlace({
+    required this.id,
+    required this.name,
+    required this.type,
+    this.meta = '',
+    this.url,
+    this.location,
+  });
 
   final String id;
   final String name;
@@ -42,6 +71,9 @@ class PlannedPlace {
 
   /// 카카오맵 장소 페이지. 없으면 null.
   final String? url;
+
+  /// 가볼 곳 지도에 찍을 좌표. 없으면 목록에만 나온다.
+  final GeoPoint? location;
 }
 
 class TripDay {

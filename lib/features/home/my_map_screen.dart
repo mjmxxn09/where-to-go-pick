@@ -13,10 +13,13 @@ import '../trip_card/trip_card_screen.dart';
 
 /// 1 · 내 여행 지도: 다녀온 시·군·구가 색칠된 지도와 지금 여행 바로가기.
 class MyMapScreen extends StatefulWidget {
-  const MyMapScreen({super.key, required this.onNewTrip, required this.onOpenTrip});
+  const MyMapScreen({super.key, required this.onNewTrip, required this.onOpenTrip, this.onSignOut});
 
   final VoidCallback onNewTrip;
   final VoidCallback onOpenTrip;
+
+  /// 로그인(카카오·픽클)해 있을 때만. 오른쪽 위 ⋮ 메뉴의 로그아웃.
+  final VoidCallback? onSignOut;
 
   @override
   State<MyMapScreen> createState() => _MyMapScreenState();
@@ -124,6 +127,17 @@ class _MyMapScreenState extends State<MyMapScreen> {
                 label: const Text('새 여행'),
               ),
             ),
+            if (widget.onSignOut != null)
+              PopupMenuButton<String>(
+                tooltip: '더 보기',
+                icon: const Icon(Icons.more_vert, color: AppColors.textSecondary),
+                onSelected: (v) {
+                  if (v == 'signOut') widget.onSignOut!();
+                },
+                itemBuilder: (context) => const [
+                  PopupMenuItem(value: 'signOut', child: Text('로그아웃')),
+                ],
+              ),
           ],
         ),
         const SizedBox(height: Gap.s + 4),

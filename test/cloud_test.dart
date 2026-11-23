@@ -148,6 +148,7 @@ void main() {
   group('카카오 로그인(Supabase Auth, PKCE)', () {
     test('브라우저로 카카오 로그인 → 돌아온 code와 verifier로 세션을 받고, 다음엔 보관한 세션을 이어 쓴다', () async {
       final account = MemoryCloudSecretStore();
+      final used = MemoryCloudSecretStore();
       final requests = <http.Request>[];
       Uri? opened;
       final session = CloudSession(
@@ -156,6 +157,7 @@ void main() {
         allowGuest: true,
         guestStore: MemoryCloudSecretStore(),
         accountStore: account,
+        accountUsedStore: used,
         clock: () => now,
         httpClient: MockClient((req) async {
           requests.add(req);
@@ -189,27 +191,66 @@ void main() {
       expect(verifier.length, greaterThanOrEqualTo(43));
       expect(opened!.queryParameters['code_challenge'], pkceChallengeOf(verifier));
       expect(account.value, 'acct-1');
+      expect(used.value, '${now.millisecondsSinceEpoch}', reason: '로그인한 시각부터 30일을 센다');
       expect(await session.hasAccount, isTrue);
 
       // 앱을 다시 켜면(새 세션 객체) 보관한 세션으로 이어 간다 — 게스트로 가입하지 않는다.
+      final calls = <String>[];
       final reopened = CloudSession(
         url: _url,
         publishableKey: _key,
         allowGuest: true,
         guestStore: MemoryCloudSecretStore(),
         accountStore: account,
-        clock: () => now,
+        accountUsedStore: used,
+        clock: () => now.add(const Duration(days: 29)),
         httpClient: MockClient((req) async {
-          expect(req.url.path, '/auth/v1/token');
+          calls.add('${req.url.path} ${req.headers['Authorization'] ?? ''}');
+          if (req.url.path == '/auth/v1/logout') return http.Response('', 204);
           expect(req.url.queryParameters['grant_type'], 'refresh_token');
           return _json({'access_token': _jwt('kakao-user'), 'expires_in': 3600, 'refresh_token': 'acct-2'});
         }),
       );
-      expect((await reopened.current())!.userId, 'kakao-user');
+      expect((await reopened.current())!.userId, 'kakao-user', reason: '29일 만이면 그대로');
       expect(account.value, 'acct-2');
 
+      // 로그아웃: 서버의 그 세션을 폐기하고 폰에서 지운다.
       await reopened.signOutAccount();
+      expect(calls.last, startsWith('/auth/v1/logout Bearer '));
       expect(await reopened.hasAccount, isFalse);
+      expect(used.value, isNull);
+    });
+
+    test('30일 넘게 안 쓰면 로그아웃(서버 세션도 폐기), 쓰면 다시 30일', () async {
+      final account = MemoryCloudSecretStore()..value = 'old-refresh';
+      final used = MemoryCloudSecretStore()..value = '${now.millisecondsSinceEpoch}';
+      var t = now.add(const Duration(days: 20));
+      final paths = <String>[];
+      final session = CloudSession(
+        url: _url,
+        publishableKey: _key,
+        accountStore: account,
+        accountUsedStore: used,
+        clock: () => t,
+        httpClient: MockClient((req) async {
+          paths.add(req.url.path);
+          if (req.url.path == '/auth/v1/logout') return http.Response('', 204);
+          return _json({'access_token': _jwt('kakao-user'), 'expires_in': 3600, 'refresh_token': 'r${paths.length}'});
+        }),
+      );
+      // 20일 만에 쓰면 이어지고, 쓴 시각이 새로 적힌다.
+      expect(await session.hasAccount, isTrue);
+      expect((await session.current())!.userId, 'kakao-user');
+      expect(used.value, '${t.millisecondsSinceEpoch}');
+
+      // 그 뒤로 31일 안 쓰면 끝난다.
+      session.invalidate();
+      paths.clear();
+      t = t.add(const Duration(days: 31));
+      expect(await session.hasAccount, isFalse);
+      expect(paths, ['/auth/v1/token', '/auth/v1/logout'], reason: '폐기하려고 한 번 받아서 바로 로그아웃');
+      expect(account.value, isNull);
+      expect(await session.current(), isNull, reason: '게스트도 막혀 있으면 로그인 수단 없음');
     });
 
     test('카카오에서 거절·취소하면 세션을 만들지 않는다', () async {

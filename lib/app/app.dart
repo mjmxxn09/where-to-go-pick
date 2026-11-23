@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/auth/token_store.dart';
 import '../core/cloud/cloud_session.dart';
@@ -18,6 +19,7 @@ import '../core/votes/vote_repository.dart';
 import '../core/theme/app_surfaces.dart';
 import '../core/theme/app_theme.dart';
 import '../features/explore/explore_screen.dart';
+import '../features/explore/trip_candidates.dart';
 import '../features/home/my_map_screen.dart';
 import '../features/korea_map/korea_map_data.dart';
 import '../features/splash/pickle_login_sheet.dart';
@@ -28,6 +30,7 @@ import '../features/trip/trip_cloud.dart';
 import '../features/trip/trip_controller.dart';
 import '../features/trip/trip_screen.dart';
 import '../features/trip/trip_store.dart';
+import '../features/trip_card/card_stickers.dart';
 import 'app_scope.dart';
 
 class WhereToGoPickApp extends StatefulWidget {
@@ -180,6 +183,9 @@ class _StartGateState extends State<StartGate> {
   var _started = false;
   var _loggingIn = false;
 
+  /// 카카오·픽클로 로그인해 있어서 로그아웃할 수 있는지(게스트·예시 모드는 아님).
+  var _canSignOut = false;
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -210,6 +216,7 @@ class _StartGateState extends State<StartGate> {
     setState(() {
       _character = character;
       _signedIn = signedIn;
+      _canSignOut = signedIn;
     });
     if (signedIn) {
       await Future<void>.delayed(widget.splashDuration);
@@ -225,7 +232,10 @@ class _StartGateState extends State<StartGate> {
     }
     final ok = await showPickleLoginSheet(context, scope.pickle);
     if (!ok || !mounted) return;
-    setState(() => _entered = true);
+    setState(() {
+      _entered = true;
+      _canSignOut = true;
+    });
     // 로그인 전에 남긴 기록도 이제 픽클 계정으로 올린다.
     unawaited(scope.trip.sync());
   }
@@ -247,7 +257,10 @@ class _StartGateState extends State<StartGate> {
     try {
       await cloud.session.signInWithKakao(openOAuthBrowser);
       if (!mounted) return;
-      setState(() => _entered = true);
+      setState(() {
+        _entered = true;
+        _canSignOut = true;
+      });
       // 폰에 있던 기록(게스트로 남긴 것 포함)을 카카오 계정으로 올린다.
       unawaited(scope.trip.sync());
     } on OAuthCanceled {
@@ -260,6 +273,47 @@ class _StartGateState extends State<StartGate> {
     }
   }
 
+  /// 로그아웃: 못 올린 기록을 먼저 올려 보고, 서버 세션을 폐기한 뒤 이 폰의 기록을 비우고 시작 화면으로.
+  Future<void> _signOut() async {
+    final scope = AppScope.of(context);
+    await scope.trip.sync();
+    if (!mounted) return;
+    final pending = !scope.trip.allSynced;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('로그아웃할까요?'),
+        content: Text(
+          pending
+              ? '아직 서버에 못 올린 기록이 있어요. 지금 로그아웃하면 그 기록은 이 폰에서 사라져요. 인터넷이 될 때 다시 해 보세요.'
+              : '여행 기록은 계정에 저장돼 있어요. 다시 로그인하면 그대로 돌아와요. 이 폰에서는 지워요.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('취소')),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(pending ? '그래도 로그아웃' : '로그아웃'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    try {
+      await scope.cloud?.session.signOutAccount();
+      await scope.pickle.signOut();
+    } on Object catch (e) {
+      debugPrint('로그아웃 중 오류(폰에서는 로그아웃해요): $e');
+    }
+    await scope.trip.clearLocal();
+    await clearLocalUserData();
+    if (!mounted) return;
+    setState(() {
+      _entered = false;
+      _signedIn = false;
+      _canSignOut = false;
+    });
+  }
+
   void _say(String text) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
@@ -267,7 +321,7 @@ class _StartGateState extends State<StartGate> {
 
   @override
   Widget build(BuildContext context) {
-    if (_entered) return const HomeShell();
+    if (_entered) return HomeShell(onSignOut: _canSignOut ? _signOut : null);
     final character = _character;
     if (character == null) return const ColoredBox(color: Color(0xFFF8F5FF));
     return StartScreen(
@@ -281,7 +335,10 @@ class _StartGateState extends State<StartGate> {
 
 /// 하단 3탭: 여행지 · 여행 중 · 내 지도(처음엔 여행지)
 class HomeShell extends StatefulWidget {
-  const HomeShell({super.key});
+  const HomeShell({super.key, this.onSignOut});
+
+  /// 로그인해 있을 때만(내 지도 ⋮ → 로그아웃).
+  final VoidCallback? onSignOut;
 
   @override
   State<HomeShell> createState() => _HomeShellState();
@@ -299,7 +356,7 @@ class _HomeShellState extends State<HomeShell> {
     final pages = [
       ExploreScreen(onTripStarted: () => _go(_trip)),
       const TripScreen(),
-      MyMapScreen(onNewTrip: () => _go(_explore), onOpenTrip: () => _go(_trip)),
+      MyMapScreen(onNewTrip: () => _go(_explore), onOpenTrip: () => _go(_trip), onSignOut: widget.onSignOut),
     ];
     return Scaffold(
       body: AppBackground(child: SafeArea(bottom: false, child: IndexedStack(index: _index, children: pages))),
@@ -313,5 +370,18 @@ class _HomeShellState extends State<HomeShell> {
         ],
       ),
     );
+  }
+}
+
+/// 로그아웃 때 이 폰에 남은 사용자 데이터(카드 꾸미기, 여행지 후보·물어본 투표)를 지운다. 여행 기록은 [TripController.clearLocal].
+Future<void> clearLocalUserData() async {
+  final prefs = await SharedPreferences.getInstance();
+  for (final key in const [
+    CardStickerStore.prefsKey,
+    CardStickerStore.stopsPrefsKey,
+    TripCandidates.prefsKey,
+    TripCandidates.pollsPrefsKey,
+  ]) {
+    await prefs.remove(key);
   }
 }

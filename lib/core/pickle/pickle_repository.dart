@@ -8,6 +8,9 @@ abstract interface class PickleRepository {
   Future<void> login({required String email, required String password, bool replaceExistingSession = false});
 
   Future<UserProfile?> me();
+
+  /// 이 폰에서 픽클 로그아웃(보관한 토큰 지우기).
+  Future<void> signOut();
   Future<List<InterestCategory>> interestCategories();
   Future<List<String>> myInterestKeys();
   Future<PickleFriend?> myFriend();
@@ -24,6 +27,9 @@ class RemotePickleRepository implements PickleRepository {
 
   @override
   Future<UserProfile?> me() async => await _client.hasSession ? _client.getMyProfile() : null;
+
+  @override
+  Future<void> signOut() => _client.signOutLocally();
 
   @override
   Future<List<InterestCategory>> interestCategories() => _client.listInterestCategories();
@@ -45,6 +51,9 @@ class FixturePickleRepository implements PickleRepository {
 
   @override
   Future<UserProfile?> me() async => const UserProfile(subjectId: 'fixture-subject', nickname: '픽클러');
+
+  @override
+  Future<void> signOut() async {}
 
   @override
   Future<List<InterestCategory>> interestCategories() async => const [

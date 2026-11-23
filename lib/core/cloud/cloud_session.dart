@@ -46,6 +46,9 @@ class SecureCloudSecretStore implements CloudSecretStore {
   /// 카카오 등 계정 로그인 세션.
   static const accountKey = 'supabase.account_refresh.v1';
 
+  /// 카카오 등 계정 세션을 마지막으로 쓴 시각(밀리초). 오래 안 쓰면 로그아웃한다.
+  static const accountUsedKey = 'supabase.account_used.v1';
+
   final String _key;
   final FlutterSecureStorage _storage;
 
@@ -88,6 +91,10 @@ class OAuthCanceled implements Exception {
 ///
 /// 계정이 바뀌어도(게스트 → 카카오) 폰에 있는 기록은 다음 sync 때 새 계정으로 올라간다.
 ///
+/// 카카오 등 계정 세션은 [accountIdleLimit](30일) 동안 쓰지 않으면 끝난다(다시 로그인).
+/// Supabase 무료 요금제는 서버 쪽 세션 기간 설정이 없어(refresh token은 만료되지 않음) 앱에서 정한다.
+/// 토큰을 받을 때마다(앱을 열 때, 쓰는 동안 1시간마다) 마지막 사용 시각을 새로 적는다.
+///
 /// 여러 곳에서 동시에 불러도 토큰 요청은 한 번만 나간다.
 class CloudSession {
   CloudSession({
@@ -97,12 +104,15 @@ class CloudSession {
     this.allowGuest = false,
     CloudSecretStore? guestStore,
     CloudSecretStore? accountStore,
+    CloudSecretStore? accountUsedStore,
+    this.accountIdleLimit = const Duration(days: 30),
     http.Client? httpClient,
     DateTime Function()? clock,
     Random? random,
   })  : baseUri = Uri.parse(url.endsWith('/') ? url.substring(0, url.length - 1) : url),
         _guestStore = guestStore ?? SecureCloudSecretStore(),
         _accountStore = accountStore ?? SecureCloudSecretStore(null, SecureCloudSecretStore.accountKey),
+        _accountUsedStore = accountUsedStore ?? SecureCloudSecretStore(null, SecureCloudSecretStore.accountUsedKey),
         _random = random ?? Random.secure(),
         _http = httpClient ?? http.Client(),
         _clock = clock ?? DateTime.now;
@@ -113,7 +123,14 @@ class CloudSession {
   final bool allowGuest;
   final CloudSecretStore _guestStore;
   final CloudSecretStore _accountStore;
+  final CloudSecretStore _accountUsedStore;
+
+  /// 이만큼 안 쓰면 카카오 등 계정 세션을 끝낸다.
+  final Duration accountIdleLimit;
   final Random _random;
+
+  /// 지금 토큰이 카카오 등 계정 세션에서 왔는지(로그아웃 때 서버 세션을 폐기하려고).
+  bool _authIsAccount = false;
   final http.Client _http;
   final DateTime Function() _clock;
 
@@ -140,9 +157,14 @@ class CloudSession {
       final token = await source(refresh: false);
       if (token != null) next = await _exchange(token, source);
     }
-    next ??= await _account();
+    var fromAccount = false;
+    if (next == null) {
+      next = await _account();
+      fromAccount = next != null;
+    }
     if (next == null && allowGuest) next = await _guest();
     _auth = next;
+    _authIsAccount = fromAccount;
     return next;
   }
 
@@ -151,14 +173,79 @@ class CloudSession {
   static const redirectUrl = '$redirectScheme://login-callback';
 
   /// 카카오(등) 계정으로 로그인해 둔 세션이 있는지. 시작 화면에서 바로 홈으로 갈지 정할 때 쓴다.
+  /// [accountIdleLimit] 넘게 안 썼으면 여기서 로그아웃 처리하고 false.
   Future<bool> get hasAccount async => (await _savedAccount())?.isNotEmpty ?? false;
 
   /// 보관함을 못 읽으면(보안 저장소 오류 등) 계정 세션이 없는 것으로 본다 — 게스트·폰 저장은 그대로 된다.
+  /// 오래 안 쓴 세션이면 서버 세션을 폐기하고 지운 뒤 null.
   Future<String?> _savedAccount() async {
+    String? saved;
     try {
-      return await _accountStore.read();
+      saved = await _accountStore.read();
     } on Object {
       return null;
+    }
+    if (saved == null || saved.isEmpty) return null;
+    if (await _accountIdleTooLong()) {
+      await _endAccount(saved);
+      return null;
+    }
+    return saved;
+  }
+
+  Future<bool> _accountIdleTooLong() async {
+    String? raw;
+    try {
+      raw = await _accountUsedStore.read();
+    } on Object {
+      return false;
+    }
+    final ms = int.tryParse(raw ?? '');
+    if (ms == null) return false; // 기록이 없으면(이 기능 전에 로그인) 지금부터 센다
+    return _clock().difference(DateTime.fromMillisecondsSinceEpoch(ms)) > accountIdleLimit;
+  }
+
+  Future<void> _markAccountUsed() async {
+    try {
+      await _accountUsedStore.write('${_clock().millisecondsSinceEpoch}');
+    } on Object {
+      // 못 적어도 로그인은 그대로
+    }
+  }
+
+  /// 계정 세션 끝내기: 서버의 그 세션을 폐기(가능하면)하고 폰에서 지운다.
+  Future<void> _endAccount(String refreshToken, {String? accessToken}) async {
+    try {
+      var token = accessToken;
+      if (token == null) {
+        // 폐기하려면 access token이 필요하다 — refresh로 하나 받아서 바로 폐기한다.
+        final res = await _http.post(
+          endpoint('/auth/v1/token', {'grant_type': 'refresh_token'}),
+          headers: _headers,
+          body: jsonEncode({'refresh_token': refreshToken}),
+        );
+        if (res.statusCode == 200) {
+          token = (jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>)['access_token'] as String?;
+        }
+      }
+      if (token != null) {
+        await _http.post(
+          endpoint('/auth/v1/logout', {'scope': 'local'}),
+          headers: {..._headers, 'Authorization': 'Bearer $token'},
+        );
+      }
+    } on Object {
+      // 서버에 못 닿아도 폰에서는 로그아웃한다(그 refresh token은 이제 아무도 갖고 있지 않다).
+    }
+    try {
+      await _accountStore.write(null);
+      await _accountUsedStore.write(null);
+    } on Object {
+      // 보관함 오류는 무시
+    }
+    if (_authIsAccount) {
+      _auth = null;
+      _authIsAccount = false;
     }
   }
 
@@ -195,14 +282,29 @@ class CloudSession {
       );
     }
     final auth = await _sessionFrom(res, _accountStore);
+    await _markAccountUsed();
     _auth = auth;
+    _authIsAccount = true;
     return auth;
   }
 
-  /// 카카오 등 계정 로그인을 끝낸다(이 폰에서만). 폰에 있는 기록은 남는다.
+  /// 카카오 등 계정 로그아웃: 서버의 그 세션을 폐기하고 폰에서 지운다. 폰에 있는 여행 기록은 부르는 쪽에서 정리한다.
   Future<void> signOutAccount() async {
-    await _accountStore.write(null);
-    _auth = null;
+    String? saved;
+    try {
+      saved = await _accountStore.read();
+    } on Object {
+      saved = null;
+    }
+    final access = _authIsAccount ? _auth?.accessToken : null;
+    _authIsAccount = true; // _endAccount가 지금 토큰도 지우게
+    if (saved != null && saved.isNotEmpty) {
+      await _endAccount(saved, accessToken: access);
+    } else {
+      await _accountStore.write(null);
+      _auth = null;
+      _authIsAccount = false;
+    }
   }
 
   Future<CloudAuth?> _account() async {
@@ -213,7 +315,11 @@ class CloudSession {
       headers: _headers,
       body: jsonEncode({'refresh_token': saved}),
     );
-    if (res.statusCode == 200) return _sessionFrom(res, _accountStore);
+    if (res.statusCode == 200) {
+      final auth = await _sessionFrom(res, _accountStore);
+      await _markAccountUsed();
+      return auth;
+    }
     if (res.statusCode >= 500) throw CloudAuthException('account refresh ${res.statusCode}', statusCode: res.statusCode);
     // 세션이 만료·폐기됐다 → 다시 로그인해야 한다.
     await _accountStore.write(null);

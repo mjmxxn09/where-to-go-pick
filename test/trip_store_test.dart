@@ -404,4 +404,25 @@ void main() {
     expect(decodeTripLog(encodeTripLog(store.log)).trips.single.planned.map((p) => p.id), ['tour:2', 'gyeongpo'],
         reason: '바꾼 순서가 저장된다');
   });
+
+  test('로그아웃: 다 올렸는지 알고, 폰의 기록을 비운다(서버 기록은 그대로)', () async {
+    final store = MemoryTripStore();
+    final cloud = _FakeCloud()..failPush = true;
+    final controller = TripController(clock: () => DateTime(2026, 11, 20, 10), store: store, cloud: cloud)
+      ..startTrip(cityId: '32030', cityName: '강릉시', provinceName: '강원특별자치도')
+      ..checkIn(_place);
+    await controller.sync();
+    expect(controller.allSynced, isFalse, reason: '올리지 못한 게 있다');
+
+    cloud.failPush = false;
+    await controller.sync();
+    expect(controller.allSynced, isTrue);
+    final onServer = cloud.remote.length;
+
+    await controller.clearLocal();
+    expect(controller.trip, isNull);
+    expect(controller.trips, isEmpty);
+    expect(store.log.trips, isEmpty);
+    expect(cloud.remote.length, onServer, reason: '서버 기록은 지우지 않는다');
+  });
 }

@@ -76,6 +76,26 @@ class TripController extends ChangeNotifier {
     await sync();
   }
 
+  /// 서버와 다 맞췄는지(못 올린 기록·못 지운 것이 없는지). 로그아웃 전에 본다.
+  bool get allSynced => !_needsPush && _deletedTrips.isEmpty && _deletedCheckIns.isEmpty;
+
+  /// 로그아웃: 이 폰의 여행 기록을 비운다(서버 기록은 그대로 — 다시 로그인하면 받아 온다).
+  /// 같은 폰에서 다른 사람이 로그인했을 때 앞사람 기록이 그 계정으로 올라가지 않게.
+  Future<void> clearLocal() async {
+    await _syncing;
+    _trips = const [];
+    _trip = null;
+    _deletedTrips = {};
+    _deletedCheckIns = {};
+    _needsPush = false;
+    notifyListeners();
+    try {
+      await _store?.save(const TripLog());
+    } on Object catch (e) {
+      debugPrint('폰의 여행 기록을 비우지 못했어요: $e');
+    }
+  }
+
   /// 서버의 기록을 받아 합치고, 폰의 기록을 올린다. 로그인 직후에도 부른다.
   Future<void> sync() {
     final cloud = _cloud;

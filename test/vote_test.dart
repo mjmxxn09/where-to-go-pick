@@ -5,13 +5,6 @@ import 'package:where_to_go_pick/features/votes/pickle_ask_bubble.dart';
 import 'package:where_to_go_pick/features/votes/poll_question_sheet.dart';
 
 void main() {
-  test('다녀온 사람 순위 문구', () {
-    expect(formatCount(1240), '1,240');
-    expect(formatCount(312), '312');
-    expect(formatCount(1234567), '1,234,567');
-    expect(const VisitorRank(rank: 1, voters: 1240, scope: '해변').label, '다녀온 1,240명이 고른 해변 1위');
-  });
-
   test('픽클이 질문의 "랑/이랑"', () {
     expect(withRang('경포해변'), '경포해변이랑');
     expect(withRang('안목 커피거리'), '안목 커피거리랑');
@@ -23,15 +16,6 @@ void main() {
     final points = await votes.answerPair(cityId: '32030', winnerPlaceId: 'anmok', otherPlaceId: 'gyeongpo');
     expect(points, 10);
     expect(votes.answers.single.winner, 'anmok');
-  });
-
-  test('나도 한 표는 켜고 끌 수 있다', () async {
-    final votes = FixtureVoteRepository();
-    await votes.setPlaceVote(cityId: 'c', placeId: 'a', on: true);
-    await votes.setPlaceVote(cityId: 'c', placeId: 'b', on: true);
-    await votes.setPlaceVote(cityId: 'c', placeId: 'a', on: false);
-    expect(await votes.myPlaceVotes('c'), {'b'});
-    expect(await votes.myPlaceVotes('other'), isEmpty);
   });
 
   test('후보 투표: 내 표를 바꿀 수 있고, 마감하면 더는 바뀌지 않는다', () async {

@@ -27,7 +27,7 @@ class AppScope extends InheritedWidget {
   final PickleRepository pickle;
   final LifeRepository life;
 
-  /// 픽클 투표(체크인 질문·나도 한 표·후보 투표·카드 투표). 지금은 예시 구현.
+  /// 픽클 투표(체크인 질문·후보 투표·카드 투표). 지금은 예시 구현.
   final VoteRepository votes;
   final TripController trip;
   final Future<KoreaMapData> mapData;

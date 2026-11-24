@@ -2,39 +2,12 @@
 ///
 /// 투표를 따로 "만드는" 화면은 없다. 여행하다 보면 저절로 생긴다.
 /// - 체크인 직후 픽클이가 "방금 간 곳 vs 그 전에 간 곳" 하나를 묻는다 → [answerPair] (다녀온 사람 표)
-/// - 추천 목록에서 다녀온 곳에 "나도 한 표" → [setPlaceVote]
 /// - 여행지 후보를 ♡로 담아 친구한테 물어본다 → [askFriends]
 /// - 여행 카드에 "한 표 핀"을 붙여 공유하면 투표가 된다 → [shareCardPoll]
 ///
 /// 픽클 서버(VoteLock `POST /v1/polls` 등)와 붙이려면 먼저 정할 것이 있다(docs/architecture.md "픽클 투표").
 /// 그 전까지는 [FixtureVoteRepository]를 쓴다.
 library;
-
-/// "다녀온 1,240명이 고른 해변 1위" 같은 한 줄.
-class VisitorRank {
-  const VisitorRank({required this.rank, required this.voters, required this.scope});
-
-  final int rank;
-
-  /// 그 장소에 체크인하고 표를 준 사람 수.
-  final int voters;
-
-  /// 순위를 매긴 범위(예: 해변, 카페).
-  final String scope;
-
-  String get label => '다녀온 ${formatCount(voters)}명이 고른 $scope $rank위';
-}
-
-/// 1240 → "1,240"
-String formatCount(int n) {
-  final s = n.abs().toString();
-  final out = StringBuffer(n < 0 ? '-' : '');
-  for (var i = 0; i < s.length; i++) {
-    if (i > 0 && (s.length - i) % 3 == 0) out.write(',');
-    out.write(s[i]);
-  }
-  return out.toString();
-}
 
 enum PollKind {
   /// 여행지 후보(시·군·구)를 친구한테 묻는 투표.
@@ -122,11 +95,6 @@ abstract interface class VoteRepository {
   /// 체크인 직후 질문에 답한다. 고른 곳에 "다녀온 사람 표"가 들어간다. 받은 픽클 포인트를 돌려준다.
   Future<int> answerPair({required String cityId, required String winnerPlaceId, required String otherPlaceId});
 
-  /// 다녀온 곳의 "나도 한 표".
-  Future<void> setPlaceVote({required String cityId, required String placeId, required bool on});
-
-  Future<Set<String>> myPlaceVotes(String cityId);
-
   /// ♡로 담은 여행지 후보를 친구한테 묻는다(2~4곳).
   Future<Poll> askFriends({required String question, required List<PollCandidate> cities});
 
@@ -151,7 +119,6 @@ class FixtureVoteRepository implements VoteRepository {
   @override
   bool get isSample => true;
 
-  final Map<String, Set<String>> _placeVotes = {};
   final Map<String, Poll> _polls = {};
   final List<({String cityId, String winner, String other})> answers = [];
   var _seq = 0;
@@ -168,15 +135,6 @@ class FixtureVoteRepository implements VoteRepository {
     answers.add((cityId: cityId, winner: winnerPlaceId, other: otherPlaceId));
     return pointsPerAnswer;
   }
-
-  @override
-  Future<void> setPlaceVote({required String cityId, required String placeId, required bool on}) async {
-    final set = _placeVotes.putIfAbsent(cityId, () => {});
-    on ? set.add(placeId) : set.remove(placeId);
-  }
-
-  @override
-  Future<Set<String>> myPlaceVotes(String cityId) async => {...?_placeVotes[cityId]};
 
   Poll _create(PollKind kind, String question, List<PollCandidate> candidates) {
     if (candidates.length < 2 || candidates.length > 4) {

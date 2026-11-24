@@ -38,9 +38,6 @@ class _TripScreenState extends State<TripScreen> {
   /// 날씨 카드가 보여 주는 날(날짜 칸을 따라간다).
   WeatherPick? _weatherPick;
 
-  /// 다녀온 곳에 준 "나도 한 표".
-  Set<String> _myVotes = {};
-
   /// 체크인 직후 픽클이의 질문(방금 간 곳, 그 전에 간 곳). null이면 말풍선 없음.
   ({CheckIn just, CheckIn other})? _ask;
   String? _picked;
@@ -152,13 +149,9 @@ class _TripScreenState extends State<TripScreen> {
     // 여행 중이면 오늘, 출발 전·기간이 지났으면 전체.
     final today = trip.dayIndexOf(DateTime.now());
     _planDay = today >= 0 && today < tripDayCount(trip, DateTime.now()) ? today : null;
-    _myVotes = {};
     _resetSearch();
     // 빌드 중이라 글자 지우기는 다음 프레임에(입력창이 듣고 있으면 빌드 중 갱신 오류가 난다).
     if (_searchCtrl.text.isNotEmpty) WidgetsBinding.instance.addPostFrameCallback((_) => _searchCtrl.clear());
-    scope.votes.myPlaceVotes(trip.cityId).then((v) {
-      if (mounted && _loadedCity == trip.cityId) setState(() => _myVotes = v);
-    });
   }
 
   /// "✓ 다녀옴"을 누르면: 잘못 누른 체크인을 취소(묻고 나서). 취소한 뒤에도 잠깐 되돌리기.
@@ -245,12 +238,6 @@ class _TripScreenState extends State<TripScreen> {
     if (mounted && identical(_ask, ask)) setState(() => _ask = null);
   }
 
-  Future<void> _togglePlaceVote(String cityId, String placeId) async {
-    final on = !_myVotes.contains(placeId);
-    setState(() => _myVotes = {..._myVotes}..toggle(placeId, on));
-    await AppScope.of(context).votes.setPlaceVote(cityId: cityId, placeId: placeId, on: on);
-  }
-
   @override
   Widget build(BuildContext context) {
     final controller = AppScope.of(context).trip;
@@ -333,12 +320,10 @@ class _TripScreenState extends State<TripScreen> {
         onDayTap: planned == null ? null : () => _pickDay(controller, trip, planned),
         done: controller.isCheckedIn(p.id),
         planned: controller.isPlanned(p.id),
-        voted: _myVotes.contains(p.id),
         // 출발 전에는 체크인을 막는다(가볼 곳 담기는 된다).
         onCheckIn: trip.isBeforeStart(DateTime.now()) ? null : () => _checkIn(controller, p),
         onUndoCheckIn: () => _undoCheckIn(controller, p),
         onTogglePlan: () => controller.togglePlanned(p, day: _dayInRange(trip, _planDay)),
-        onVote: () => _togglePlaceVote(trip.cityId, p.id),
       );
 
   /// 기간 안의 날만(기간을 줄였거나 기간이 지난 뒤면 전체로).
@@ -671,10 +656,6 @@ class _TripScreenState extends State<TripScreen> {
   }
 }
 
-extension on Set<String> {
-  void toggle(String value, bool on) => on ? add(value) : remove(value);
-}
-
 /// 날씨 카드가 보여 줄 날. [date]가 null이면 예보가 없는 날이라 [note]만 보여 준다.
 class WeatherPick {
   const WeatherPick({required this.label, this.date, this.note, this.isToday = false});
@@ -919,11 +900,9 @@ class _PlaceTile extends StatelessWidget {
     required this.place,
     required this.done,
     required this.planned,
-    required this.voted,
     required this.onCheckIn,
     this.onUndoCheckIn,
     required this.onTogglePlan,
-    required this.onVote,
     this.rank,
     this.pinStyle = false,
     this.dayLabel,
@@ -943,13 +922,11 @@ class _PlaceTile extends StatelessWidget {
   final VoidCallback? onDayTap;
   final bool done;
   final bool planned;
-  final bool voted;
   final VoidCallback? onCheckIn;
 
   /// "✓ 다녀옴"을 누르면(잘못 누른 체크인 취소).
   final VoidCallback? onUndoCheckIn;
   final VoidCallback onTogglePlan;
-  final VoidCallback onVote;
 
   Future<void> _openDetail(BuildContext context) async {
     final url = place.url;
@@ -962,8 +939,7 @@ class _PlaceTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final rank = place.visitorRank;
-    final order = this.rank;
+    final order = rank;
     return Container(
       margin: const EdgeInsets.only(bottom: Gap.s),
       padding: EdgeInsets.fromLTRB(order == null ? 14 : 10, 10, 10, 10),
@@ -1016,20 +992,10 @@ class _PlaceTile extends StatelessWidget {
                     ],
                   ],
                 ),
-                // 순위와 "나도 한 표"는 늘 한 줄. 좁으면 순위 글자 끝이 말줄임으로 줄어든다.
-                if (rank != null || done || dayLabel != null) ...[
+                // 가볼 곳이면 그날 꼬리표(누르면 날 바꾸기).
+                if (dayLabel != null) ...[
                   const SizedBox(height: 3),
-                  Row(
-                    children: [
-                      if (dayLabel != null) ...[
-                        _DayTag(label: dayLabel!, onTap: onDayTap),
-                        const SizedBox(width: 4),
-                      ],
-                      if (rank != null) Flexible(child: _RankLine(rank: rank)),
-                      if (rank != null && done) const SizedBox(width: 4),
-                      if (done) _VoteChip(voted: voted, onTap: onVote),
-                    ],
-                  ),
+                  _DayTag(label: dayLabel!, onTap: onDayTap),
                 ],
               ],
             ),
@@ -1069,55 +1035,6 @@ class _PlaceTile extends StatelessWidget {
       ),
     );
   }
-}
-
-/// "다녀온 1,240명이 고른 해변 1위"
-class _RankLine extends StatelessWidget {
-  const _RankLine({required this.rank});
-
-  final VisitorRank rank;
-
-  static const _color = Color(0xFFA3245F);
-
-  @override
-  Widget build(BuildContext context) => Text(
-        rank.label,
-        maxLines: 1,
-        softWrap: false,
-        overflow: TextOverflow.ellipsis,
-        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: _color),
-      );
-}
-
-/// 다녀온 곳에만 보이는 "나도 한 표".
-class _VoteChip extends StatelessWidget {
-  const _VoteChip({required this.voted, required this.onTap});
-
-  final bool voted;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) => Semantics(
-        button: true,
-        toggled: voted,
-        child: Material(
-          color: voted ? _RankLine._color : const Color(0xFFFCEEF5),
-          borderRadius: BorderRadius.circular(99),
-          child: InkWell(
-            onTap: onTap,
-            borderRadius: BorderRadius.circular(99),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-              child: Text(
-                voted ? '내 표 ✓' : '나도 한 표',
-                maxLines: 1,
-                softWrap: false,
-                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: voted ? Colors.white : _RankLine._color),
-              ),
-            ),
-          ),
-        ),
-      );
 }
 
 class _Timeline extends StatelessWidget {

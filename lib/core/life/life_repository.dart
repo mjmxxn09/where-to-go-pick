@@ -1,5 +1,4 @@
 import '../../features/trip/trip_models.dart';
-import '../votes/vote_repository.dart';
 
 /// 하늘 상태(기상청 단기예보 SKY·PTY를 앱용으로 단순화).
 enum Sky { sunny, cloudy, rainy, snowy }
@@ -58,7 +57,6 @@ class PlaceSuggestion {
     required this.name,
     required this.type,
     required this.meta,
-    this.visitorRank,
     this.url,
     this.location,
   });
@@ -70,9 +68,6 @@ class PlaceSuggestion {
 
   /// 장소 상세 페이지(카카오맵). 누르면 사진·리뷰·길찾기를 볼 수 있다. 없으면 null.
   final String? url;
-
-  /// 픽클 "다녀온 사람 표" 순위. 표가 아직 없으면 null.
-  final VisitorRank? visitorRank;
 
   /// 장소 좌표(가볼 곳 지도용). 없으면 null.
   final GeoPoint? location;
@@ -167,23 +162,18 @@ class FixtureLifeRepository implements LifeRepository {
   Future<List<PlaceSuggestion>> places({required String cityId, required List<String> interestKeys}) async => const [
         PlaceSuggestion(
           id: 'gyeongpo', name: '경포해변', type: PlaceType.beach, meta: '해변 · 자연', location: GeoPoint(37.8055, 128.9087),
-          visitorRank: VisitorRank(rank: 1, voters: 1240, scope: '해변'),
         ),
         PlaceSuggestion(
           id: 'anmok', name: '안목 커피거리', type: PlaceType.cafe, meta: '해변 · 카페', location: GeoPoint(37.7724, 128.9478),
-          visitorRank: VisitorRank(rank: 1, voters: 860, scope: '카페'),
         ),
         PlaceSuggestion(
           id: 'ojukheon', name: '오죽헌', type: PlaceType.heritage, meta: '역사', location: GeoPoint(37.7792, 128.8786),
-          visitorRank: VisitorRank(rank: 2, voters: 410, scope: '역사'),
         ),
         PlaceSuggestion(
           id: 'jungang-market', name: '강릉중앙시장', type: PlaceType.market, meta: '시장 · 맛집', location: GeoPoint(37.7545, 128.8990),
-          visitorRank: VisitorRank(rank: 1, voters: 312, scope: '시장'),
         ),
         PlaceSuggestion(
           id: 'chodang', name: '초당순두부마을', type: PlaceType.food, meta: '맛집', location: GeoPoint(37.7914, 128.9149),
-          visitorRank: VisitorRank(rank: 1, voters: 528, scope: '순두부'),
         ),
         PlaceSuggestion(
           id: 'jumunjin', name: '주문진 수산시장', type: PlaceType.seafood, meta: '시장 · 해산물', location: GeoPoint(37.8930, 128.8263),

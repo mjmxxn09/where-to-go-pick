@@ -38,8 +38,9 @@ abstract final class AppColors {
 
 /// 제목체·손글씨체(모두 assets/fonts에 포함).
 abstract final class AppFonts {
-  /// 화면 제목: 블랙한산스(앱 이름과 같은 글꼴).
-  static const title = 'BlackHanSans';
+  /// 화면 제목·지도 이름·숫자: 주아(Jua). 둥글고 받침이 또렷해서 작은 글자도 잘 읽힌다.
+  /// (전에는 블랙한산스 — 굵어서 "강릉"이 "강등"처럼 뭉개졌다. 이제 로고에만 쓴다.)
+  static const title = 'Jua';
   /// 여행 노트 손글씨: 감자꽃(Gamja Flower).
   static const handwriting = 'GamjaFlower';
 

@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 
 import '../../app/app_scope.dart';
 import '../../core/life/life_repository.dart';
+import '../../core/pickle/pickle_models.dart';
 import '../../core/text/josa.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/votes/vote_repository.dart';
 import '../korea_map/korea_map_data.dart';
 import '../korea_map/korea_map_view.dart';
 import '../shared/weather_icon.dart';
+import '../splash/pickle_face_avatar.dart';
 import '../trip/trip_dates_sheet.dart';
 import '../trip/trip_models.dart';
 import '../votes/poll_question_sheet.dart';
@@ -28,6 +30,9 @@ class _ExploreScreenState extends State<ExploreScreen> {
 
   /// 고른 여행지. 처음엔 아무것도 고르지 않은 전국 지도로 연다.
   SelectedCity? _city;
+
+  /// 머리말 얼굴(픽클 친구). 한 번만 묻는다.
+  Future<PickleFriend?>? _friend;
 
   /// ♡로 담은 여행지 후보(최대 4곳, 기기에 저장). 2곳부터 친구한테 물어볼 수 있다.
   TripCandidates? _cands;
@@ -166,7 +171,28 @@ class _ExploreScreenState extends State<ExploreScreen> {
     return ListView(
       padding: const EdgeInsets.all(Gap.m),
       children: [
-        Text('어디로 떠나볼까?', style: titleStyle(26)),
+        // 내 지도와 같은 머리말: 픽클 친구 얼굴 + "보리랑 고르기".
+        FutureBuilder<PickleFriend?>(
+          future: _friend ??= scope.pickle.myFriend(),
+          builder: (context, snap) => Row(
+            children: [
+              PickleFaceAvatar(friend: snap.data),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${withRang(snap.data?.name ?? '픽클이')} 고르기',
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.textSecondary),
+                    ),
+                    Text('어디로 떠나볼까?', style: titleStyle(26)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
         const SizedBox(height: Gap.s + 2),
         FutureBuilder<KoreaMapData>(
           future: scope.mapData,
